@@ -18,10 +18,11 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Sparkles,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -71,6 +72,10 @@ export default function MultimodalChatbot() {
   const [inputValue, setInputValue] = useState("")
   const [isRecording, setIsRecording] = useState(false)
 
+  // 临时聊天状态 - 用于新对话但还没有真正发送消息的情况
+  const [tempChat, setTempChat] = useState<Chat | null>(null)
+  const [isInTempChat, setIsInTempChat] = useState(false)
+
   // 侧边栏收起/展开状态
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
@@ -96,18 +101,18 @@ export default function MultimodalChatbot() {
     }
   }, [])
 
-  // 获取当前聊天
-  const currentChat = chats.find((chat) => chat.id === currentChatId)
+  // 获取当前聊天 - 优先显示临时聊天
+  const currentChat = isInTempChat && tempChat ? tempChat : chats.find((chat) => chat.id === currentChatId)
 
   // 切换侧边栏收起/展开
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed)
   }
 
-  // 创建新聊天
+  // 创建新聊天 - 只创建临时聊天，不添加到聊天记录
   const createNewChat = () => {
     const newChatId = `chat_${Date.now()}`
-    const newChat: Chat = {
+    const newTempChat: Chat = {
       id: newChatId,
       title: "新对话",
       messages: [
@@ -123,18 +128,28 @@ export default function MultimodalChatbot() {
       timestamp: new Date(),
     }
 
-    setChats((prev) => [newChat, ...prev])
-    setCurrentChatId(newChatId)
+    setTempChat(newTempChat)
+    setIsInTempChat(true)
+    setCurrentChatId(null) // 清除当前选中的聊天
   }
 
   // 选择聊天
   const selectChat = (chatId: string) => {
     setCurrentChatId(chatId)
+    setIsInTempChat(false)
+    setTempChat(null)
+  }
+
+  // 回到欢迎界面
+  const backToWelcome = () => {
+    setCurrentChatId(null)
+    setIsInTempChat(false)
+    setTempChat(null)
   }
 
   // 发送消息
   const sendMessage = () => {
-    if (!inputValue.trim() || !currentChatId) return
+    if (!inputValue.trim()) return
 
     const newMessage: Message = {
       id: `msg_${Date.now()}`,
@@ -144,22 +159,38 @@ export default function MultimodalChatbot() {
       type: "text",
     }
 
-    // 更新聊天记录
-    setChats((prev) =>
-      prev.map((chat) => {
-        if (chat.id === currentChatId) {
-          const updatedMessages = [...chat.messages, newMessage]
-          return {
-            ...chat,
-            messages: updatedMessages,
-            lastMessage: inputValue,
-            timestamp: new Date(),
-            title: chat.title === "新对话" ? inputValue.slice(0, 30) : chat.title,
+    // 如果是临时聊天状态，需要先创建真正的聊天记录
+    if (isInTempChat && tempChat) {
+      const realChat: Chat = {
+        ...tempChat,
+        messages: [...tempChat.messages, newMessage],
+        lastMessage: inputValue,
+        timestamp: new Date(),
+        title: inputValue.slice(0, 30), // 使用第一条用户消息作为标题
+      }
+
+      // 添加到聊天记录
+      setChats((prev) => [realChat, ...prev])
+      setCurrentChatId(realChat.id)
+      setIsInTempChat(false)
+      setTempChat(null)
+    } else if (currentChatId) {
+      // 更新现有聊天记录
+      setChats((prev) =>
+        prev.map((chat) => {
+          if (chat.id === currentChatId) {
+            const updatedMessages = [...chat.messages, newMessage]
+            return {
+              ...chat,
+              messages: updatedMessages,
+              lastMessage: inputValue,
+              timestamp: new Date(),
+            }
           }
-        }
-        return chat
-      }),
-    )
+          return chat
+        }),
+      )
+    }
 
     setInputValue("")
 
@@ -173,17 +204,20 @@ export default function MultimodalChatbot() {
         type: "text",
       }
 
-      setChats((prev) =>
-        prev.map((chat) => {
-          if (chat.id === currentChatId) {
-            return {
-              ...chat,
-              messages: [...chat.messages, botReply],
+      // 如果刚刚从临时聊天转为真实聊天，需要更新真实聊天记录
+      if (currentChatId) {
+        setChats((prev) =>
+          prev.map((chat) => {
+            if (chat.id === currentChatId) {
+              return {
+                ...chat,
+                messages: [...chat.messages, botReply],
+              }
             }
-          }
-          return chat
-        }),
-      )
+            return chat
+          }),
+        )
+      }
     }, 1000)
   }
 
@@ -243,16 +277,31 @@ export default function MultimodalChatbot() {
       // 停止录音并发送消息
       setIsRecording(false)
 
-      if (currentChatId) {
-        // 模拟语音消息
-        const voiceMessage: Message = {
-          id: `msg_${Date.now()}`,
-          content: "语音消息已录制完成",
-          sender: "user",
+      const voiceMessage: Message = {
+        id: `msg_${Date.now()}`,
+        content: "语音消息已录制完成",
+        sender: "user",
+        timestamp: new Date(),
+        type: "audio",
+      }
+
+      // 如果是临时聊天状态，需要先创建真正的聊天记录
+      if (isInTempChat && tempChat) {
+        const realChat: Chat = {
+          ...tempChat,
+          messages: [...tempChat.messages, voiceMessage],
+          lastMessage: "语音消息",
           timestamp: new Date(),
-          type: "audio",
+          title: "语音对话", // 语音开始的对话使用默认标题
         }
 
+        // 添加到聊天记录
+        setChats((prev) => [realChat, ...prev])
+        setCurrentChatId(realChat.id)
+        setIsInTempChat(false)
+        setTempChat(null)
+      } else if (currentChatId) {
+        // 更新现有聊天记录
         setChats((prev) =>
           prev.map((chat) => {
             if (chat.id === currentChatId) {
@@ -273,16 +322,34 @@ export default function MultimodalChatbot() {
   // 文件上传
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file && currentChatId) {
-      const fileMessage: Message = {
-        id: `msg_${Date.now()}`,
-        content: `已上传文件: ${file.name}`,
-        sender: "user",
+    if (!file) return
+
+    const fileMessage: Message = {
+      id: `msg_${Date.now()}`,
+      content: `已上传文件: ${file.name}`,
+      sender: "user",
+      timestamp: new Date(),
+      type: "file",
+      fileName: file.name,
+    }
+
+    // 如果是临时聊天状态，需要先创建真正的聊天记录
+    if (isInTempChat && tempChat) {
+      const realChat: Chat = {
+        ...tempChat,
+        messages: [...tempChat.messages, fileMessage],
+        lastMessage: `文件: ${file.name}`,
         timestamp: new Date(),
-        type: "file",
-        fileName: file.name,
+        title: `文件: ${file.name.slice(0, 20)}`, // 使用文件名作为标题
       }
 
+      // 添加到聊天记录
+      setChats((prev) => [realChat, ...prev])
+      setCurrentChatId(realChat.id)
+      setIsInTempChat(false)
+      setTempChat(null)
+    } else if (currentChatId) {
+      // 更新现有聊天记录
       setChats((prev) =>
         prev.map((chat) => {
           if (chat.id === currentChatId) {
@@ -296,10 +363,10 @@ export default function MultimodalChatbot() {
           return chat
         }),
       )
+    }
 
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ""
-      }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
     }
   }
 
@@ -351,6 +418,8 @@ export default function MultimodalChatbot() {
     setAppUser(null)
     setChats([])
     setCurrentChatId(null)
+    setIsInTempChat(false)
+    setTempChat(null)
     localStorage.removeItem("chatbot_user")
   }
 
@@ -508,12 +577,16 @@ export default function MultimodalChatbot() {
             {/* 聊天头部 */}
             <div className="border-b p-4">
               <div className="flex items-center space-x-3">
-                <Avatar>
-                  <AvatarImage src="/placeholder.svg?height=40&width=40" />
-                  <AvatarFallback>
-                    <Bot className="h-5 w-5" />
-                  </AvatarFallback>
-                </Avatar>
+                <div
+                  className="relative w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg cursor-pointer hover:shadow-xl transition-all duration-200 hover:scale-105"
+                  onClick={backToWelcome}
+                  title="回到欢迎界面"
+                >
+                  <Sparkles className="h-5 w-5 text-white" />
+                  <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border border-white flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                  </div>
+                </div>
                 <div>
                   <h1 className="font-semibold">AI助手</h1>
                   <p className="text-sm text-muted-foreground">
