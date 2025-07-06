@@ -896,7 +896,7 @@ export default function MultimodalChatbot() {
                     variant="outline"
                     onClick={() => fileInputRef.current?.click()}
                     className="shrink-0"
-                    disabled={isWaitingForReply}
+                    disabled={isWaitingForReply || isRecording}
                   >
                     <Paperclip className="h-4 w-4" />
                   </Button>
@@ -916,20 +916,22 @@ export default function MultimodalChatbot() {
                       ref={inputRef}
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
-                      placeholder={isWaitingForReply ? "等待AI回复中..." : "输入消息..."}
+                      placeholder={
+                        isWaitingForReply ? "等待AI回复中..." : isRecording ? "正在语音对话中..." : "输入消息..."
+                      }
                       onKeyPress={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey && !isWaitingForReply) {
+                        if (e.key === "Enter" && !e.shiftKey && !isWaitingForReply && !isRecording) {
                           e.preventDefault()
                           sendMessage()
                         }
                       }}
                       className="pr-12"
-                      disabled={isWaitingForReply}
+                      disabled={isWaitingForReply || isRecording}
                     />
                     <Button
                       size="icon"
                       onClick={sendMessage}
-                      disabled={!inputValue.trim() || isWaitingForReply}
+                      disabled={!inputValue.trim() || isWaitingForReply || isRecording}
                       className="absolute right-1 top-1 h-8 w-8"
                     >
                       <Send className="h-4 w-4" />
@@ -943,13 +945,13 @@ export default function MultimodalChatbot() {
                   className="hidden"
                   onChange={handleFileUpload}
                   accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
-                  disabled={isWaitingForReply}
+                  disabled={isWaitingForReply || isRecording}
                 />
 
                 {isRecording && (
                   <div className="mt-2 text-center">
                     <span className="text-sm text-muted-foreground animate-pulse">
-                      🔴 正在录制语音...点击停止按钮结束录制
+                      🔴 正在语音对话...点击停止按钮结束本次语音对话
                     </span>
                   </div>
                 )}
