@@ -71,6 +71,7 @@ export default function MultimodalChatbot() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [inputValue, setInputValue] = useState("")
   const [isRecording, setIsRecording] = useState(false)
+  const [isWaitingForReply, setIsWaitingForReply] = useState(false) // 等待AI回复状态
 
   // 临时聊天状态 - 用于新对话但还没有真正发送消息的情况
   const [tempChat, setTempChat] = useState<Chat | null>(null)
@@ -87,7 +88,8 @@ export default function MultimodalChatbot() {
   const [newTitle, setNewTitle] = useState("")
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null) // 用于自动滚动到底部
+  const inputRef = useRef<HTMLInputElement>(null) // 用于自动获取焦点
 
   // 从localStorage恢复用户信息
   useEffect(() => {
@@ -102,20 +104,24 @@ export default function MultimodalChatbot() {
     }
   }, [])
 
+  // 获取当前聊天 - 优先显示临时聊天
   const currentChat = isInTempChat && tempChat ? tempChat : chats.find((chat) => chat.id === currentChatId)
 
+  // 自动滚动到底部
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
+  // 监听当前聊天变化，自动滚动到底部
   useEffect(() => {
     if (currentChat && currentChat.messages.length > 0) {
       setTimeout(() => {
         scrollToBottom()
       }, 100)
     }
-  }, [currentChat]) // Updated dependency to currentChat
+  }, [currentChat])
 
+  // 监听聊天切换，自动滚动到底部
   useEffect(() => {
     if (currentChatId || isInTempChat) {
       setTimeout(() => {
@@ -124,10 +130,12 @@ export default function MultimodalChatbot() {
     }
   }, [currentChatId, isInTempChat])
 
+  // 切换侧边栏收起/展开
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed)
   }
 
+  // 创建新聊天 - 支持预设问题
   const createNewChat = (presetQuestion?: string) => {
     const newChatId = `chat_${Date.now()}`
     const newTempChat: Chat = {
@@ -148,17 +156,27 @@ export default function MultimodalChatbot() {
 
     setTempChat(newTempChat)
     setIsInTempChat(true)
-    setCurrentChatId(null)
+    setCurrentChatId(null) // 清除当前选中的聊天
 
+    // 如果有预设问题，自动输入并发送
     if (presetQuestion) {
       setInputValue(presetQuestion)
+      // 使用setTimeout确保状态更新后再发送消息
       setTimeout(() => {
         sendPresetMessage(presetQuestion, newTempChat)
       }, 100)
+    } else {
+      // 没有预设问题时，自动获取输入框焦点
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 200)
     }
   }
 
+  // 发送预设消息
   const sendPresetMessage = (question: string, tempChatData: Chat) => {
+    setIsWaitingForReply(true) // 设置等待回复状态
+
     const newMessage: Message = {
       id: `msg_${Date.now()}`,
       content: question,
@@ -167,20 +185,23 @@ export default function MultimodalChatbot() {
       type: "text",
     }
 
+    // 创建真正的聊天记录
     const realChat: Chat = {
       ...tempChatData,
       messages: [...tempChatData.messages, newMessage],
       lastMessage: question,
       timestamp: new Date(),
-      title: question.slice(0, 30),
+      title: question.slice(0, 30), // 使用问题作为标题
     }
 
+    // 添加到聊天记录
     setChats((prev) => [realChat, ...prev])
     setCurrentChatId(realChat.id)
     setIsInTempChat(false)
     setTempChat(null)
-    setInputValue("")
+    setInputValue("") // 清空输入框
 
+    // 模拟AI回复
     setTimeout(() => {
       const botReply: Message = {
         id: `msg_${Date.now() + 1}`,
@@ -201,9 +222,16 @@ export default function MultimodalChatbot() {
           return chat
         }),
       )
+
+      setIsWaitingForReply(false) // 回复完成，重置状态
+      // 自动获取输入框焦点
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 100)
     }, 1000)
   }
 
+  // 获取预设问题的回答
   const getPresetAnswer = (question: string): string => {
     const answers: { [key: string]: string } = {
       "Spark公寓的租金价格如何？":
@@ -219,23 +247,31 @@ export default function MultimodalChatbot() {
     return answers[question] || "感谢您的提问！我会为您提供详细的信息。如果您有其他问题，随时可以咨询我。"
   }
 
+  // 选择聊天
   const selectChat = (chatId: string) => {
     setCurrentChatId(chatId)
     setIsInTempChat(false)
     setTempChat(null)
+    // 切换聊天后自动滚动到底部
     setTimeout(() => {
       scrollToBottom()
+      // 自动获取输入框焦点
+      inputRef.current?.focus()
     }, 200)
   }
 
+  // 回到欢迎界面
   const backToWelcome = () => {
     setCurrentChatId(null)
     setIsInTempChat(false)
     setTempChat(null)
   }
 
+  // 发送消息
   const sendMessage = () => {
-    if (!inputValue.trim()) return
+    if (!inputValue.trim() || isWaitingForReply) return
+
+    setIsWaitingForReply(true) // 设置等待回复状态
 
     const newMessage: Message = {
       id: `msg_${Date.now()}`,
@@ -245,20 +281,23 @@ export default function MultimodalChatbot() {
       type: "text",
     }
 
+    // 如果是临时聊天状态，需要先创建真正的聊天记录
     if (isInTempChat && tempChat) {
       const realChat: Chat = {
         ...tempChat,
         messages: [...tempChat.messages, newMessage],
         lastMessage: inputValue,
         timestamp: new Date(),
-        title: inputValue.slice(0, 30),
+        title: inputValue.slice(0, 30), // 使用第一条用户消息作为标题
       }
 
+      // 添加到聊天记录
       setChats((prev) => [realChat, ...prev])
       setCurrentChatId(realChat.id)
       setIsInTempChat(false)
       setTempChat(null)
     } else if (currentChatId) {
+      // 更新现有聊天记录
       setChats((prev) =>
         prev.map((chat) => {
           if (chat.id === currentChatId) {
@@ -277,7 +316,8 @@ export default function MultimodalChatbot() {
 
     setInputValue("")
 
-    setTimeout(() => {
+    // 模拟AI回复，包含错误处理和超时
+    const replyTimeout = setTimeout(() => {
       const botReply: Message = {
         id: `msg_${Date.now() + 1}`,
         content: "我收到了您的消息。这是一个模拟回复，在实际应用中会连接到AI服务。",
@@ -299,9 +339,55 @@ export default function MultimodalChatbot() {
           }),
         )
       }
+
+      setIsWaitingForReply(false) // 回复完成，重置状态
+      // 自动获取输入框焦点
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 100)
     }, 1000)
+
+    // 设置超时处理（10秒后如果还没回复就重置状态）
+    const errorTimeout = setTimeout(() => {
+      if (isWaitingForReply) {
+        const errorReply: Message = {
+          id: `msg_${Date.now() + 2}`,
+          content: "抱歉，回复超时了，请稍后重试。",
+          sender: "bot",
+          timestamp: new Date(),
+          type: "text",
+        }
+
+        if (currentChatId) {
+          setChats((prev) =>
+            prev.map((chat) => {
+              if (chat.id === currentChatId) {
+                return {
+                  ...chat,
+                  messages: [...chat.messages, errorReply],
+                }
+              }
+              return chat
+            }),
+          )
+        }
+
+        setIsWaitingForReply(false) // 超时后重置状态
+        // 自动获取输入框焦点
+        setTimeout(() => {
+          inputRef.current?.focus()
+        }, 100)
+      }
+    }, 10000)
+
+    // 清理函数
+    return () => {
+      clearTimeout(replyTimeout)
+      clearTimeout(errorTimeout)
+    }
   }
 
+  // 重命名聊天
   const renameChat = () => {
     if (!newTitle.trim() || !selectedChatId) return
 
@@ -312,18 +398,24 @@ export default function MultimodalChatbot() {
     setSelectedChatId("")
   }
 
+  // 删除聊天
   const deleteChat = () => {
     if (!selectedChatId) return
 
+    // 使用函数式更新，确保获取最新状态
     setChats((currentChats) => {
+      // 过滤掉要删除的聊天
       const newChats = currentChats.filter((chat) => chat.id !== selectedChatId)
 
+      // 如果删除的是当前选中的聊天，需要重新选择
       if (currentChatId === selectedChatId) {
         if (newChats.length === 0) {
           setCurrentChatId(null)
         } else {
+          // 找到被删除聊天在原数组中的位置
           const deletedIndex = currentChats.findIndex((chat) => chat.id === selectedChatId)
 
+          // 选择相邻的聊天
           let nextIndex = deletedIndex
           if (nextIndex >= newChats.length) {
             nextIndex = newChats.length - 1
@@ -337,15 +429,22 @@ export default function MultimodalChatbot() {
       return newChats
     })
 
+    // 关闭对话框并重置状态
     setShowDeleteDialog(false)
     setSelectedChatId("")
   }
 
+  // 语音录制
   const toggleRecording = () => {
+    if (isWaitingForReply) return // 等待回复时不能录音
+
     if (!isRecording) {
+      // 开始录音
       setIsRecording(true)
     } else {
+      // 停止录音并发送消息
       setIsRecording(false)
+      setIsWaitingForReply(true) // 设置等待回复状态
 
       const voiceMessage: Message = {
         id: `msg_${Date.now()}`,
@@ -355,20 +454,23 @@ export default function MultimodalChatbot() {
         type: "audio",
       }
 
+      // 如果是临时聊天状态，需要先创建真正的聊天记录
       if (isInTempChat && tempChat) {
         const realChat: Chat = {
           ...tempChat,
           messages: [...tempChat.messages, voiceMessage],
           lastMessage: "语音消息",
           timestamp: new Date(),
-          title: "语音对话",
+          title: "语音对话", // 语音开始的对话使用默认标题
         }
 
+        // 添加到聊天记录
         setChats((prev) => [realChat, ...prev])
         setCurrentChatId(realChat.id)
         setIsInTempChat(false)
         setTempChat(null)
       } else if (currentChatId) {
+        // 更新现有聊天记录
         setChats((prev) =>
           prev.map((chat) => {
             if (chat.id === currentChatId) {
@@ -383,12 +485,46 @@ export default function MultimodalChatbot() {
           }),
         )
       }
+
+      // 模拟AI对语音的回复
+      setTimeout(() => {
+        const botReply: Message = {
+          id: `msg_${Date.now() + 1}`,
+          content: "我收到了您的语音消息，正在为您处理中...",
+          sender: "bot",
+          timestamp: new Date(),
+          type: "text",
+        }
+
+        if (currentChatId) {
+          setChats((prev) =>
+            prev.map((chat) => {
+              if (chat.id === currentChatId) {
+                return {
+                  ...chat,
+                  messages: [...chat.messages, botReply],
+                }
+              }
+              return chat
+            }),
+          )
+        }
+
+        setIsWaitingForReply(false) // 回复完成，重置状态
+        // 自动获取输入框焦点
+        setTimeout(() => {
+          inputRef.current?.focus()
+        }, 100)
+      }, 1500)
     }
   }
 
+  // 文件上传
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (!file) return
+    if (!file || isWaitingForReply) return // 等待回复时不能上传文件
+
+    setIsWaitingForReply(true) // 设置等待回复状态
 
     const fileMessage: Message = {
       id: `msg_${Date.now()}`,
@@ -399,20 +535,23 @@ export default function MultimodalChatbot() {
       fileName: file.name,
     }
 
+    // 如果是临时聊天状态，需要先创建真正的聊天记录
     if (isInTempChat && tempChat) {
       const realChat: Chat = {
         ...tempChat,
         messages: [...tempChat.messages, fileMessage],
         lastMessage: `文件: ${file.name}`,
         timestamp: new Date(),
-        title: `文件: ${file.name.slice(0, 20)}`,
+        title: `文件: ${file.name.slice(0, 20)}`, // 使用文件名作为标题
       }
 
+      // 添加到聊天记录
       setChats((prev) => [realChat, ...prev])
       setCurrentChatId(realChat.id)
       setIsInTempChat(false)
       setTempChat(null)
     } else if (currentChatId) {
+      // 更新现有聊天记录
       setChats((prev) =>
         prev.map((chat) => {
           if (chat.id === currentChatId) {
@@ -431,8 +570,40 @@ export default function MultimodalChatbot() {
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
+
+    // 模拟AI对文件的回复
+    setTimeout(() => {
+      const botReply: Message = {
+        id: `msg_${Date.now() + 1}`,
+        content: `我已经收到您上传的文件"${file.name}"，正在为您分析处理中...`,
+        sender: "bot",
+        timestamp: new Date(),
+        type: "text",
+      }
+
+      if (currentChatId) {
+        setChats((prev) =>
+          prev.map((chat) => {
+            if (chat.id === currentChatId) {
+              return {
+                ...chat,
+                messages: [...chat.messages, botReply],
+              }
+            }
+            return chat
+          }),
+        )
+      }
+
+      setIsWaitingForReply(false) // 回复完成，重置状态
+      // 自动获取输入框焦点
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 100)
+    }, 2000)
   }
 
+  // 格式化时间
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString("zh-CN", {
       hour: "2-digit",
@@ -440,6 +611,7 @@ export default function MultimodalChatbot() {
     })
   }
 
+  // 时间分组
   const getTimeGroup = (date: Date) => {
     const now = new Date()
     const diffTime = now.getTime() - date.getTime()
@@ -466,11 +638,15 @@ export default function MultimodalChatbot() {
 
   const chatGroups = groupChatsByTime(chats)
 
+  // 登录处理
   const handleLogin = (userData: AppUser) => {
     setAppUser(userData)
+    // 保存到localStorage
     localStorage.setItem("chatbot_user", JSON.stringify(userData))
+    // 这里可以加载用户的聊天记录
   }
 
+  // 登出处理
   const handleLogout = () => {
     setAppUser(null)
     setChats([])
@@ -482,12 +658,14 @@ export default function MultimodalChatbot() {
 
   return (
     <div className="flex h-screen bg-background">
+      {/* 左侧边栏 - 可收起 */}
       <div
         className={`
           relative bg-muted/30 border-r flex flex-col transition-all duration-300 ease-in-out
           ${sidebarCollapsed ? "w-0 overflow-hidden" : "w-80"}
         `}
       >
+        {/* 收起/展开按钮 */}
         <Button
           size="icon"
           variant="ghost"
@@ -501,7 +679,9 @@ export default function MultimodalChatbot() {
           {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
 
+        {/* 侧边栏内容 */}
         <div className="flex flex-col h-full min-w-80">
+          {/* 侧边栏头部 */}
           <div className="p-4 border-b">
             <Button
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-full"
@@ -579,6 +759,7 @@ export default function MultimodalChatbot() {
             )}
           </ScrollArea>
 
+          {/* 登录区域 */}
           <div className="p-4 border-t">
             {appUser ? (
               <div className="flex items-center justify-between">
@@ -609,6 +790,7 @@ export default function MultimodalChatbot() {
         </div>
       </div>
 
+      {/* 展开按钮 - 当侧边栏收起时显示 */}
       {sidebarCollapsed && (
         <Button
           size="icon"
@@ -621,9 +803,11 @@ export default function MultimodalChatbot() {
         </Button>
       )}
 
+      {/* 主聊天区域 */}
       <div className="flex-1 flex flex-col">
         {currentChat ? (
           <>
+            {/* 聊天头部 */}
             <div className="border-b p-4">
               <div className="flex items-center space-x-3">
                 <div
@@ -652,6 +836,7 @@ export default function MultimodalChatbot() {
               </div>
             </div>
 
+            {/* 消息区域 */}
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4 max-w-4xl mx-auto">
                 {currentChat.messages.map((message) => (
@@ -697,10 +882,12 @@ export default function MultimodalChatbot() {
                     </div>
                   </div>
                 ))}
+                {/* 用于自动滚动到底部的锚点 */}
                 <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
 
+            {/* 输入区域 */}
             <div className="border-t p-4">
               <div className="max-w-4xl mx-auto">
                 <div className="flex items-end space-x-2">
@@ -709,6 +896,7 @@ export default function MultimodalChatbot() {
                     variant="outline"
                     onClick={() => fileInputRef.current?.click()}
                     className="shrink-0"
+                    disabled={isWaitingForReply}
                   >
                     <Paperclip className="h-4 w-4" />
                   </Button>
@@ -718,27 +906,30 @@ export default function MultimodalChatbot() {
                     variant={isRecording ? "destructive" : "outline"}
                     onClick={toggleRecording}
                     className="shrink-0"
+                    disabled={isWaitingForReply && !isRecording}
                   >
                     {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                   </Button>
 
                   <div className="flex-1 relative">
                     <Input
+                      ref={inputRef}
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
-                      placeholder="输入消息..."
+                      placeholder={isWaitingForReply ? "等待AI回复中..." : "输入消息..."}
                       onKeyPress={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
+                        if (e.key === "Enter" && !e.shiftKey && !isWaitingForReply) {
                           e.preventDefault()
                           sendMessage()
                         }
                       }}
                       className="pr-12"
+                      disabled={isWaitingForReply}
                     />
                     <Button
                       size="icon"
                       onClick={sendMessage}
-                      disabled={!inputValue.trim()}
+                      disabled={!inputValue.trim() || isWaitingForReply}
                       className="absolute right-1 top-1 h-8 w-8"
                     >
                       <Send className="h-4 w-4" />
@@ -752,6 +943,7 @@ export default function MultimodalChatbot() {
                   className="hidden"
                   onChange={handleFileUpload}
                   accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                  disabled={isWaitingForReply}
                 />
 
                 {isRecording && (
@@ -769,8 +961,10 @@ export default function MultimodalChatbot() {
         )}
       </div>
 
+      {/* 登录注册对话框 */}
       <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} onLogin={handleLogin} />
 
+      {/* 重命名对话框 */}
       <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
         <DialogContent>
           <DialogHeader>
@@ -796,6 +990,7 @@ export default function MultimodalChatbot() {
         </DialogContent>
       </Dialog>
 
+      {/* 删除确认对话框 */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
