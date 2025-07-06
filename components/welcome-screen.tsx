@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 
 interface WelcomeScreenProps {
-  onStartChat: () => void
+  onStartChat: (presetQuestion?: string) => void
 }
 
 export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
@@ -25,6 +25,13 @@ export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
       title: "语音交互",
       description: "支持语音输入，让交流更加便捷自然",
     },
+  ]
+
+  const presetQuestions = [
+    "Spark公寓的租金价格如何？",
+    "有哪些户型可以选择？",
+    "公寓周边的交通便利吗？",
+    "入住需要什么手续？",
   ]
 
   return (
@@ -60,7 +67,7 @@ export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
 
         <div className="space-y-4">
           <Button
-            onClick={onStartChat}
+            onClick={() => onStartChat()}
             size="lg"
             className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-8 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200"
           >
@@ -74,19 +81,17 @@ export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
         <div className="space-y-3">
           <p className="text-sm font-medium text-muted-foreground">您可以这样问我：</p>
           <div className="flex flex-wrap gap-2 justify-center">
-            {["Spark公寓的租金价格如何？", "有哪些户型可以选择？", "公寓周边的交通便利吗？", "入住需要什么手续？"].map(
-              (question, index) => (
-                <Button
-                  key={index}
-                  variant="outline"
-                  size="sm"
-                  className="text-xs hover:bg-primary/10 hover:border-primary/50 bg-transparent"
-                  onClick={onStartChat}
-                >
-                  {question}
-                </Button>
-              ),
-            )}
+            {presetQuestions.map((question, index) => (
+              <Button
+                key={index}
+                variant="outline"
+                size="sm"
+                className="text-xs hover:bg-primary/10 hover:border-primary/50 bg-transparent transition-all duration-200 hover:scale-105"
+                onClick={() => onStartChat(question)}
+              >
+                {question}
+              </Button>
+            ))}
           </div>
         </div>
       </div>

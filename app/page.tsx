@@ -109,8 +109,8 @@ export default function MultimodalChatbot() {
     setSidebarCollapsed(!sidebarCollapsed)
   }
 
-  // 创建新聊天 - 只创建临时聊天，不添加到聊天记录
-  const createNewChat = () => {
+  // 创建新聊天 - 支持预设问题
+  const createNewChat = (presetQuestion?: string) => {
     const newChatId = `chat_${Date.now()}`
     const newTempChat: Chat = {
       id: newChatId,
@@ -131,6 +131,81 @@ export default function MultimodalChatbot() {
     setTempChat(newTempChat)
     setIsInTempChat(true)
     setCurrentChatId(null) // 清除当前选中的聊天
+
+    // 如果有预设问题，自动输入并发送
+    if (presetQuestion) {
+      setInputValue(presetQuestion)
+      // 使用setTimeout确保状态更新后再发送消息
+      setTimeout(() => {
+        sendPresetMessage(presetQuestion, newTempChat)
+      }, 100)
+    }
+  }
+
+  // 发送预设消息
+  const sendPresetMessage = (question: string, tempChatData: Chat) => {
+    const newMessage: Message = {
+      id: `msg_${Date.now()}`,
+      content: question,
+      sender: "user",
+      timestamp: new Date(),
+      type: "text",
+    }
+
+    // 创建真正的聊天记录
+    const realChat: Chat = {
+      ...tempChatData,
+      messages: [...tempChatData.messages, newMessage],
+      lastMessage: question,
+      timestamp: new Date(),
+      title: question.slice(0, 30), // 使用问题作为标题
+    }
+
+    // 添加到聊天记录
+    setChats((prev) => [realChat, ...prev])
+    setCurrentChatId(realChat.id)
+    setIsInTempChat(false)
+    setTempChat(null)
+    setInputValue("") // 清空输入框
+
+    // 模拟AI回复
+    setTimeout(() => {
+      const botReply: Message = {
+        id: `msg_${Date.now() + 1}`,
+        content: getPresetAnswer(question),
+        sender: "bot",
+        timestamp: new Date(),
+        type: "text",
+      }
+
+      setChats((prev) =>
+        prev.map((chat) => {
+          if (chat.id === realChat.id) {
+            return {
+              ...chat,
+              messages: [...chat.messages, botReply],
+            }
+          }
+          return chat
+        }),
+      )
+    }, 1000)
+  }
+
+  // 获取预设问题的回答
+  const getPresetAnswer = (question: string): string => {
+    const answers: { [key: string]: string } = {
+      "Spark公寓的租金价格如何？":
+        "Spark公寓的租金根据户型和楼层有所不同。一室一厅的月租金在3000-4000元之间，两室一厅在4500-6000元之间，三室两厅在6500-8500元之间。具体价格会根据装修标准、楼层高低、朝向等因素有所调整。我们还提供灵活的租期选择和优惠政策。",
+      "有哪些户型可以选择？":
+        "Spark公寓提供多种户型选择：\n\n• 一室一厅（45-55㎡）：适合单身人士或情侣\n• 两室一厅（70-85㎡）：适合小家庭或合租\n• 三室两厅（95-120㎡）：适合大家庭\n• 复式公寓（130-150㎡）：豪华选择\n\n所有户型都配备现代化装修，家具家电齐全，拎包即可入住。",
+      "公寓周边的交通便利吗？":
+        "Spark公寓的交通非常便利：\n\n🚇 地铁：步行5分钟到地铁站，可直达市中心\n🚌 公交：楼下就有多条公交线路\n🚗 自驾：临近主干道，出行方便\n🚲 共享单车：周边有多个共享单车停放点\n\n另外，公寓还提供免费班车服务，定时往返商业区和交通枢纽。",
+      "入住需要什么手续？":
+        "入住Spark公寓的手续很简单：\n\n📋 所需材料：\n• 身份证原件及复印件\n• 收入证明或工作证明\n• 押金（通常为1-2个月租金）\n\n✅ 办理流程：\n1. 预约看房\n2. 签订租赁合同\n3. 缴纳押金和首月租金\n4. 办理入住手续\n5. 领取门卡和钥匙\n\n整个过程通常在1-2个工作日内完成。我们还提供在线办理服务，让您更加便捷。",
+    }
+
+    return answers[question] || "感谢您的提问！我会为您提供详细的信息。如果您有其他问题，随时可以咨询我。"
   }
 
   // 选择聊天
@@ -452,7 +527,7 @@ export default function MultimodalChatbot() {
           <div className="p-4 border-b">
             <Button
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-full"
-              onClick={createNewChat}
+              onClick={() => createNewChat()}
             >
               <Plus className="h-4 w-4 mr-2" />
               新建对话
@@ -637,7 +712,7 @@ export default function MultimodalChatbot() {
                             <span className="text-sm font-medium">语音消息</span>
                           </div>
                         )}
-                        <p className="text-sm">{message.content}</p>
+                        <p className="text-sm whitespace-pre-line">{message.content}</p>
                       </div>
                       <span
                         className={`text-xs text-muted-foreground ${
