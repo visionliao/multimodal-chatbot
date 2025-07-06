@@ -890,6 +890,14 @@ export default function MultimodalChatbot() {
             {/* 输入区域 */}
             <div className="border-t p-4">
               <div className="max-w-4xl mx-auto">
+                {/* 语音提示信息，放在输入框上方 */}
+                {isRecording && (
+                  <div className="mb-2 text-center">
+                    <span className="text-sm text-muted-foreground animate-pulse">
+                      🔴 正在语音对话...点击停止按钮结束本次语音对话
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-end space-x-2">
                   <Button
                     size="icon"
@@ -947,14 +955,6 @@ export default function MultimodalChatbot() {
                   accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
                   disabled={isWaitingForReply || isRecording}
                 />
-
-                {isRecording && (
-                  <div className="mt-2 text-center">
-                    <span className="text-sm text-muted-foreground animate-pulse">
-                      🔴 正在语音对话...点击停止按钮结束本次语音对话
-                    </span>
-                  </div>
-                )}
               </div>
             </div>
           </>
