@@ -2,11 +2,12 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import { LiveKitProvider } from "@/components/livekit/LiveKitProvider"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "多模态聊天机器人",
+  title: "Spark AI Chatbot",
   description: "支持文本、语音、文档的智能聊天助手",
     generator: 'v0.dev'
 }
@@ -18,7 +19,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
-      <body className={inter.className}>{children}</body>
+      <body>
+        <LiveKitProvider>
+          {children}
+        </LiveKitProvider>
+      </body>
     </html>
   )
 }

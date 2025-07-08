@@ -39,6 +39,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { AuthDialog } from "@/components/auth-dialog"
 import { WelcomeScreen } from "@/components/welcome-screen"
+import { useLiveKit } from "@/components/livekit/LiveKitProvider"
+import useChatAndTranscription from "@/hooks/useChatAndTranscription";
 
 interface Message {
   id: string
@@ -91,6 +93,9 @@ export default function MultimodalChatbot() {
   const messagesEndRef = useRef<HTMLDivElement>(null) // 用于自动滚动到底部
   const inputRef = useRef<HTMLInputElement>(null) // 用于自动获取焦点
 
+  const { room, connected, connectRoom } = useLiveKit()
+  const { send, messages: livekitMessages } = useChatAndTranscription();
+
   // 从localStorage恢复用户信息
   useEffect(() => {
     const savedUser = localStorage.getItem("chatbot_user")
@@ -130,6 +135,59 @@ export default function MultimodalChatbot() {
     }
   }, [currentChatId, isInTempChat])
 
+  // 替换监听 livekitMessages 的 useEffect：
+  useEffect(() => {
+    if (!currentChatId) return;
+    const currentChat = chats.find(chat => chat.id === currentChatId);
+    if (!currentChat) return;
+
+    // 找到最新一条 bot 流式消息
+    const botStream = livekitMessages
+      .filter(msg => msg.from && room && msg.from.identity !== room.localParticipant.identity)
+      .slice(-1)[0]; // 只取最后一条
+
+    if (!botStream || !botStream.message) return;
+
+    setChats(prev =>
+      prev.map(chat => {
+        if (chat.id === currentChatId) {
+          const lastMsg = chat.messages[chat.messages.length - 1];
+          if (lastMsg && lastMsg.sender === "bot") {
+            // 更新最后一条 bot 消息内容
+            const newMessages = [...chat.messages];
+            newMessages[newMessages.length - 1] = {
+              ...lastMsg,
+              content: botStream.message,
+              timestamp: new Date(),
+            };
+            return { ...chat, messages: newMessages };
+          } else {
+            // 插入新 bot 消息，并聚焦输入框
+            setTimeout(() => {
+              inputRef.current?.focus();
+            }, 0);
+            return {
+              ...chat,
+              messages: [
+                ...chat.messages,
+                {
+                  id: botStream.id || `msg_${Date.now()}`,
+                  content: botStream.message,
+                  sender: "bot" as "bot",
+                  timestamp: new Date(),
+                  type: "text" as "text",
+                  fileName: undefined,
+                },
+              ],
+            };
+          }
+        }
+        return chat;
+      })
+    );
+    setIsWaitingForReply(false);
+  }, [livekitMessages, currentChatId, room]);
+
   // 切换侧边栏收起/展开
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed)
@@ -137,6 +195,8 @@ export default function MultimodalChatbot() {
 
   // 创建新聊天 - 支持预设问题
   const createNewChat = (presetQuestion?: string) => {
+    connectRoom()
+
     const newChatId = `chat_${Date.now()}`
     const newTempChat: Chat = {
       id: newChatId,
@@ -268,10 +328,19 @@ export default function MultimodalChatbot() {
   }
 
   // 发送消息
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!inputValue.trim() || isWaitingForReply) return
 
     setIsWaitingForReply(true) // 设置等待回复状态
+
+    // 发送到 livekit
+    if (room && connected && room.state === 'connected') {
+      try {
+        await send(inputValue);
+      } catch (e) {
+        console.error("发送到 livekit 失败", e);
+      }
+    }
 
     const newMessage: Message = {
       id: `msg_${Date.now()}`,
@@ -317,37 +386,6 @@ export default function MultimodalChatbot() {
     setInputValue("")
 
     // 模拟AI回复，包含错误处理和超时
-    const replyTimeout = setTimeout(() => {
-      const botReply: Message = {
-        id: `msg_${Date.now() + 1}`,
-        content: "我收到了您的消息。这是一个模拟回复，在实际应用中会连接到AI服务。",
-        sender: "bot",
-        timestamp: new Date(),
-        type: "text",
-      }
-
-      if (currentChatId) {
-        setChats((prev) =>
-          prev.map((chat) => {
-            if (chat.id === currentChatId) {
-              return {
-                ...chat,
-                messages: [...chat.messages, botReply],
-              }
-            }
-            return chat
-          }),
-        )
-      }
-
-      setIsWaitingForReply(false) // 回复完成，重置状态
-      // 自动获取输入框焦点
-      setTimeout(() => {
-        inputRef.current?.focus()
-      }, 100)
-    }, 1000)
-
-    // 设置超时处理（10秒后如果还没回复就重置状态）
     const errorTimeout = setTimeout(() => {
       if (isWaitingForReply) {
         const errorReply: Message = {
@@ -382,7 +420,6 @@ export default function MultimodalChatbot() {
 
     // 清理函数
     return () => {
-      clearTimeout(replyTimeout)
       clearTimeout(errorTimeout)
     }
   }
