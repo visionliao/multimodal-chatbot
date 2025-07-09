@@ -41,6 +41,7 @@ import { AuthDialog } from "@/components/auth-dialog"
 import { WelcomeScreen } from "@/components/welcome-screen"
 import { useLiveKit } from "@/components/livekit/LiveKitProvider"
 import useChatAndTranscription from "@/hooks/useChatAndTranscription";
+import { toastAlert } from "@/components/ui/alert-toast";
 
 interface Message {
   id: string
@@ -472,89 +473,50 @@ export default function MultimodalChatbot() {
   }
 
   // 语音录制
-  const toggleRecording = () => {
-    if (isWaitingForReply) return // 等待回复时不能录音
-
-    if (!isRecording) {
-      // 开始录音
-      setIsRecording(true)
+  const toggleRecording = async () => {
+    console.log('toggleRecording called, isRecording:', isRecording);
+    if (isRecording) {
+      // 关闭麦克风
+      try {
+        console.log('尝试关闭麦克风');
+        await room.localParticipant.setMicrophoneEnabled(false);
+        setIsRecording(false);
+        console.log('麦克风已关闭');
+      } catch (error) {
+        console.error('关闭麦克风失败', error);
+        toastAlert({
+          title: "关闭麦克风失败",
+          description: error instanceof Error && error.message ? error.message : String(error) || "请检查设备权限",
+        });
+      }
     } else {
-      // 停止录音并发送消息
-      setIsRecording(false)
-      setIsWaitingForReply(true) // 设置等待回复状态
-
-      const voiceMessage: Message = {
-        id: `msg_${Date.now()}`,
-        content: "语音消息已录制完成",
-        sender: "user",
-        timestamp: new Date(),
-        type: "audio",
+      // 检查设备
+      console.log('尝试检测麦克风设备');
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const hasMic = devices.some((d) => d.kind === "audioinput");
+      console.log('检测结果 hasMic:', hasMic, devices);
+      if (!hasMic) {
+        toastAlert({
+          title: "未检测到麦克风",
+          description: "请插入麦克风设备后重试",
+        });
+        return;
       }
-
-      // 如果是临时聊天状态，需要先创建真正的聊天记录
-      if (isInTempChat && tempChat) {
-        const realChat: Chat = {
-          ...tempChat,
-          messages: [...tempChat.messages, voiceMessage],
-          lastMessage: "语音消息",
-          timestamp: new Date(),
-          title: "语音对话", // 语音开始的对话使用默认标题
-        }
-
-        // 添加到聊天记录
-        setChats((prev) => [realChat, ...prev])
-        setCurrentChatId(realChat.id)
-        setIsInTempChat(false)
-        setTempChat(null)
-      } else if (currentChatId) {
-        // 更新现有聊天记录
-        setChats((prev) =>
-          prev.map((chat) => {
-            if (chat.id === currentChatId) {
-              return {
-                ...chat,
-                messages: [...chat.messages, voiceMessage],
-                lastMessage: "语音消息",
-                timestamp: new Date(),
-              }
-            }
-            return chat
-          }),
-        )
+      // 打开麦克风
+      try {
+        console.log('尝试打开麦克风');
+        await room.localParticipant.setMicrophoneEnabled(true);
+        setIsRecording(true);
+        console.log('麦克风已打开');
+      } catch (error) {
+        console.error('麦克风授权失败', error);
+        toastAlert({
+          title: "麦克风授权失败",
+          description: error instanceof Error && error.message ? error.message : String(error) || "请检查设备权限",
+        });
       }
-
-      // 模拟AI对语音的回复
-      setTimeout(() => {
-        const botReply: Message = {
-          id: `msg_${Date.now() + 1}`,
-          content: "我收到了您的语音消息，正在为您处理中...",
-          sender: "bot",
-          timestamp: new Date(),
-          type: "text",
-        }
-
-        if (currentChatId) {
-          setChats((prev) =>
-            prev.map((chat) => {
-              if (chat.id === currentChatId) {
-                return {
-                  ...chat,
-                  messages: [...chat.messages, botReply],
-                }
-              }
-              return chat
-            }),
-          )
-        }
-
-        setIsWaitingForReply(false) // 回复完成，重置状态
-        // 自动获取输入框焦点
-        setTimeout(() => {
-          inputRef.current?.focus()
-        }, 100)
-      }, 1500)
     }
-  }
+  };
 
   // 文件上传
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
