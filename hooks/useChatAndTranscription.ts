@@ -14,8 +14,11 @@ export default function useChatAndTranscription() {
   const room = useRoomContext();
 
   const mergedTranscriptions = useMemo(() => {
-    const merged: Array<ReceivedChatMessage> = [
-      ...transcriptions.map((transcription) => transcriptionToChatMessage(transcription, room)),
+    const merged: Array<ReceivedChatMessage & { isTranscription?: boolean }> = [
+      ...transcriptions.map((transcription) => ({
+        ...transcriptionToChatMessage(transcription, room),
+        isTranscription: true, // 标记为语音转文本
+      })),
       ...chat.chatMessages,
     ];
     return merged.sort((a, b) => a.timestamp - b.timestamp);

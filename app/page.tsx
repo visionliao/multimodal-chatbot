@@ -43,6 +43,7 @@ import { useLiveKit } from "@/components/livekit/LiveKitProvider"
 import useChatAndTranscription from "@/hooks/useChatAndTranscription";
 import { toastAlert } from "@/components/ui/alert-toast";
 
+
 interface Message {
   id: string
   content: string
@@ -70,15 +71,12 @@ interface AppUser {
 export default function MultimodalChatbot() {
   // 基础状态 - 默认没有聊天记录
   const [appUser, setAppUser] = useState<AppUser | null>(null)
+  // 聊天主逻辑
   const [chats, setChats] = useState<Chat[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [inputValue, setInputValue] = useState("")
   const [isRecording, setIsRecording] = useState(false)
   const [isWaitingForReply, setIsWaitingForReply] = useState(false) // 等待AI回复状态
-
-  // 临时聊天状态 - 用于新对话但还没有真正发送消息的情况
-  const [tempChat, setTempChat] = useState<Chat | null>(null)
-  const [isInTempChat, setIsInTempChat] = useState(false)
 
   // 侧边栏收起/展开状态
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -94,8 +92,14 @@ export default function MultimodalChatbot() {
   const messagesEndRef = useRef<HTMLDivElement>(null) // 用于自动滚动到底部
   const inputRef = useRef<HTMLInputElement>(null) // 用于自动获取焦点
 
+  // 增加临时对话 tempChat 状态
+  const [tempChat, setTempChat] = useState<Chat | null>(null);
+
   const { room, connected, connectRoom } = useLiveKit()
   const { send, messages: livekitMessages } = useChatAndTranscription();
+
+  // 记录已插入的转录消息ID，避免重复
+  const insertedTranscriptionIds = useRef<Set<string>>(new Set());
 
   // 从localStorage恢复用户信息
   useEffect(() => {
@@ -110,8 +114,8 @@ export default function MultimodalChatbot() {
     }
   }, [])
 
-  // 获取当前聊天 - 优先显示临时聊天
-  const currentChat = isInTempChat && tempChat ? tempChat : chats.find((chat) => chat.id === currentChatId)
+  // currentChat 优先 tempChat，否则用 chats+currentChatId
+  const currentChat = tempChat ? tempChat : chats.find((chat) => chat.id === currentChatId);
 
   // 自动滚动到底部
   const scrollToBottom = () => {
@@ -129,12 +133,12 @@ export default function MultimodalChatbot() {
 
   // 监听聊天切换，自动滚动到底部
   useEffect(() => {
-    if (currentChatId || isInTempChat) {
+    if (currentChatId) {
       setTimeout(() => {
         scrollToBottom()
       }, 100)
     }
-  }, [currentChatId, isInTempChat])
+  }, [currentChatId])
 
   // 替换监听 livekitMessages 的 useEffect：
   useEffect(() => {
@@ -153,7 +157,8 @@ export default function MultimodalChatbot() {
       prev.map(chat => {
         if (chat.id === currentChatId) {
           const lastMsg = chat.messages[chat.messages.length - 1];
-          if (lastMsg && lastMsg.sender === "bot") {
+          // 只有当最后一条消息是bot且id相同才更新，否则插入新消息
+          if (lastMsg && lastMsg.sender === "bot" && lastMsg.id === botStream.id) {
             // 更新最后一条 bot 消息内容
             const newMessages = [...chat.messages];
             newMessages[newMessages.length - 1] = {
@@ -163,7 +168,9 @@ export default function MultimodalChatbot() {
             };
             return { ...chat, messages: newMessages };
           } else {
-            // 插入新 bot 消息，并聚焦输入框
+            // 只在botStream.id不存在于当前消息时插入新消息
+            const exists = chat.messages.some(m => m.id === botStream.id);
+            if (exists) return chat;
             setTimeout(() => {
               inputRef.current?.focus();
             }, 0);
@@ -186,153 +193,127 @@ export default function MultimodalChatbot() {
         return chat;
       })
     );
-    setIsWaitingForReply(false);
   }, [livekitMessages, currentChatId, room]);
 
-  // 切换侧边栏收起/展开
-  const toggleSidebar = () => {
-    setSidebarCollapsed(!sidebarCollapsed)
-  }
-
-  // 创建新聊天 - 支持预设问题
-  const createNewChat = (presetQuestion?: string) => {
-    connectRoom()
-
-    const newChatId = `chat_${Date.now()}`
-    const newTempChat: Chat = {
-      id: newChatId,
-      title: "新对话",
-      messages: [
-        {
-          id: `msg_${Date.now()}`,
-          content: "您好！我是您的Spark AI助手，有任何关于Spark公寓的问题都可以咨询我。",
-          sender: "bot",
-          timestamp: new Date(),
-          type: "text",
-        },
-      ],
-      lastMessage: "",
-      timestamp: new Date(),
-    }
-
-    setTempChat(newTempChat)
-    setIsInTempChat(true)
-    setCurrentChatId(null) // 清除当前选中的聊天
-
-    // 如果有预设问题，自动输入并发送
-    if (presetQuestion) {
-      setInputValue(presetQuestion)
-      // 使用setTimeout确保状态更新后再发送消息
-      setTimeout(() => {
-        sendPresetMessage(presetQuestion, newTempChat)
-      }, 100)
-    } else {
-      // 没有预设问题时，自动获取输入框焦点
-      setTimeout(() => {
-        inputRef.current?.focus()
-      }, 200)
-    }
-  }
-
-  // 发送预设消息
-  const sendPresetMessage = (question: string, tempChatData: Chat) => {
-    setIsWaitingForReply(true) // 设置等待回复状态
-
-    const newMessage: Message = {
-      id: `msg_${Date.now()}`,
-      content: question,
-      sender: "user",
-      timestamp: new Date(),
-      type: "text",
-    }
-
-    // 创建真正的聊天记录
-    const realChat: Chat = {
-      ...tempChatData,
-      messages: [...tempChatData.messages, newMessage],
-      lastMessage: question,
-      timestamp: new Date(),
-      title: question.slice(0, 30), // 使用问题作为标题
-    }
-
-    // 添加到聊天记录
-    setChats((prev) => [realChat, ...prev])
-    setCurrentChatId(realChat.id)
-    setIsInTempChat(false)
-    setTempChat(null)
-    setInputValue("") // 清空输入框
-
-    // 模拟AI回复
-    setTimeout(() => {
-      const botReply: Message = {
-        id: `msg_${Date.now() + 1}`,
-        content: getPresetAnswer(question),
-        sender: "bot",
-        timestamp: new Date(),
-        type: "text",
-      }
-
-      setChats((prev) =>
-        prev.map((chat) => {
-          if (chat.id === realChat.id) {
+  // 监听用户自己的语音转文字消息，插入到聊天流
+  useEffect(() => {
+    if (!room || !room.localParticipant) return;
+    const myIdentity = room.localParticipant.identity;
+    // 只处理 isTranscription 为 true 的消息，避免文本输入被重复插入
+    const myTranscriptions = livekitMessages.filter(
+      (msg) =>
+        msg.from &&
+        msg.from.identity === myIdentity &&
+        msg.message &&
+        !insertedTranscriptionIds.current.has(msg.id) &&
+        (msg as any).isTranscription
+    );
+    if (!myTranscriptions.length) return;
+    myTranscriptions.forEach((msg) => {
+      console.log("lhf livekitMessages: 111", msg);
+      setChats((prevChats) => {
+        if (tempChat) {
+          const firstMessageTitle = msg.message.trim().slice(0, 30);
+          const mergedChat: Chat = {
+            ...tempChat,
+            title: firstMessageTitle || "新对话",
+            messages: [...tempChat.messages, {
+              id: msg.id,
+              content: msg.message,
+              sender: 'user' as const,
+              timestamp: new Date(msg.timestamp),
+              type: 'text' as const,
+            }],
+            lastMessage: msg.message,
+            timestamp: new Date(),
+          };
+          setCurrentChatId(mergedChat.id);
+          setTempChat(null);
+          return [mergedChat, ...prevChats];
+        } else if (prevChats.length === 0) {
+          const firstMessageTitle = msg.message.trim().slice(0, 30);
+          const newChatId = `chat_${Date.now()}`;
+          const newChat: Chat = {
+            id: newChatId,
+            title: firstMessageTitle || '新对话',
+            messages: [{
+              id: msg.id,
+              content: msg.message,
+              sender: 'user' as const,
+              timestamp: new Date(msg.timestamp),
+              type: 'text' as const,
+            }],
+            lastMessage: msg.message,
+            timestamp: new Date(),
+          };
+          console.log("lhf livekitMessages: 222", msg);
+          setCurrentChatId(newChatId);
+          return [newChat];
+        } else if (currentChatId) {
+          console.log("lhf livekitMessages: 333", msg);
+          return prevChats.map((chat) => {
+            if (chat.id === currentChatId) {
+              const alreadyExists = chat.messages.some((m) => m.id === msg.id);
+              if (alreadyExists) return chat;
+              return {
+                ...chat,
+                messages: [
+                  ...chat.messages,
+                  {
+                    id: msg.id,
+                    content: msg.message,
+                    sender: 'user' as const,
+                    timestamp: new Date(msg.timestamp),
+                    type: 'text' as const,
+                  },
+                ],
+                lastMessage: msg.message,
+                timestamp: new Date(),
+              };
+            }
+            return chat;
+          });
+        }
+        // 没有 currentChatId 但有聊天，默认插入第一个聊天并切换
+        const fallbackId = prevChats[0].id;
+        setCurrentChatId(fallbackId);
+        return prevChats.map((chat, idx) => {
+          if (idx === 0) {
+            const alreadyExists = chat.messages.some((m) => m.id === msg.id);
+            if (alreadyExists) return chat;
             return {
               ...chat,
-              messages: [...chat.messages, botReply],
-            }
+              messages: [
+                ...chat.messages,
+                {
+                  id: msg.id,
+                  content: msg.message,
+                  sender: 'user' as const,
+                  timestamp: new Date(msg.timestamp),
+                  type: 'text' as const,
+                },
+              ],
+              lastMessage: msg.message,
+              timestamp: new Date(),
+            };
           }
-          return chat
-        }),
-      )
-
-      setIsWaitingForReply(false) // 回复完成，重置状态
-      // 自动获取输入框焦点
-      setTimeout(() => {
-        inputRef.current?.focus()
-      }, 100)
-    }, 1000)
-  }
-
-  // 获取预设问题的回答
-  const getPresetAnswer = (question: string): string => {
-    const answers: { [key: string]: string } = {
-      "Spark公寓的租金价格如何？":
-        "Spark公寓的租金根据户型和楼层有所不同。一室一厅的月租金在3000-4000元之间，两室一厅在4500-6000元之间，三室两厅在6500-8500元之间。具体价格会根据装修标准、楼层高低、朝向等因素有所调整。我们还提供灵活的租期选择和优惠政策。",
-      "有哪些户型可以选择？":
-        "Spark公寓提供多种户型选择：\n\n• 一室一厅（45-55㎡）：适合单身人士或情侣\n• 两室一厅（70-85㎡）：适合小家庭或合租\n• 三室两厅（95-120㎡）：适合大家庭\n• 复式公寓（130-150㎡）：豪华选择\n\n所有户型都配备现代化装修，家具家电齐全，拎包即可入住。",
-      "公寓周边的交通便利吗？":
-        "Spark公寓的交通非常便利：\n\n🚇 地铁：步行5分钟到地铁站，可直达市中心\n🚌 公交：楼下就有多条公交线路\n🚗 自驾：临近主干道，出行方便\n🚲 共享单车：周边有多个共享单车停放点\n\n另外，公寓还提供免费班车服务，定时往返商业区和交通枢纽。",
-      "入住需要什么手续？":
-        "入住Spark公寓的手续很简单：\n\n📋 所需材料：\n• 身份证原件及复印件\n• 收入证明或工作证明\n• 押金（通常为1-2个月租金）\n\n✅ 办理流程：\n1. 预约看房\n2. 签订租赁合同\n3. 缴纳押金和首月租金\n4. 办理入住手续\n5. 领取门卡和钥匙\n\n整个过程通常在1-2个工作日内完成。我们还提供在线办理服务，让您更加便捷。",
-    }
-
-    return answers[question] || "感谢您的提问！我会为您提供详细的信息。如果您有其他问题，随时可以咨询我。"
-  }
-
-  // 选择聊天
-  const selectChat = (chatId: string) => {
-    setCurrentChatId(chatId)
-    setIsInTempChat(false)
-    setTempChat(null)
-    // 切换聊天后自动滚动到底部
+          return chat;
+        });
+      });
+      console.log("lhf livekitMessages: 444", msg);
+      insertedTranscriptionIds.current.add(msg.id);
+    });
     setTimeout(() => {
-      scrollToBottom()
-      // 自动获取输入框焦点
-      inputRef.current?.focus()
-    }, 200)
-  }
-
-  // 回到欢迎界面
-  const backToWelcome = () => {
-    setCurrentChatId(null)
-    setIsInTempChat(false)
-    setTempChat(null)
-  }
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      inputRef.current?.focus();
+    }, 100);
+  }, [livekitMessages, currentChatId, room, tempChat]);
 
   // 发送消息
   const sendMessage = async () => {
-    if (!inputValue.trim() || isWaitingForReply) return
-
-    setIsWaitingForReply(true) // 设置等待回复状态
+    console.log("lhf sendMessage called", { inputValue, isWaitingForReply, tempChat, chatsLength: chats.length, currentChatId });
+    if (!inputValue.trim() || isWaitingForReply) return;
+    setIsWaitingForReply(true);
 
     // 发送到 livekit
     if (room && connected && room.state === 'connected') {
@@ -351,37 +332,59 @@ export default function MultimodalChatbot() {
       type: "text",
     }
 
-    // 如果是临时聊天状态，需要先创建真正的聊天记录
-    if (isInTempChat && tempChat) {
-      const realChat: Chat = {
+    // 发送消息 只在 chats.length === 0 时新建聊天
+    if (tempChat) {
+      console.log("lhf sendMessage: merging tempChat");
+      const firstMessageTitle = inputValue.trim().slice(0, 30);
+      const mergedChat: Chat = {
         ...tempChat,
+        title: firstMessageTitle || "新对话",
         messages: [...tempChat.messages, newMessage],
         lastMessage: inputValue,
         timestamp: new Date(),
-        title: inputValue.slice(0, 30), // 使用第一条用户消息作为标题
-      }
-
-      // 添加到聊天记录
-      setChats((prev) => [realChat, ...prev])
-      setCurrentChatId(realChat.id)
-      setIsInTempChat(false)
-      setTempChat(null)
+      };
+      setChats((prev) => {
+        const result = [mergedChat, ...prev];
+        console.log("lhf chats after merging tempChat", result);
+        return result;
+      });
+      setCurrentChatId(mergedChat.id);
+      setTempChat(null);
+      setIsWaitingForReply(false); // 立即解锁
+    } else if (chats.length === 0) {
+      console.log("lhf sendMessage: creating new chat");
+      const firstMessageTitle = inputValue.trim().slice(0, 30);
+      const newChatId = `chat_${Date.now()}`;
+      const newChat: Chat = {
+        id: newChatId,
+        title: firstMessageTitle || "新对话",
+        messages: [newMessage],
+        lastMessage: inputValue,
+        timestamp: new Date(),
+      };
+      setChats([newChat]);
+      setCurrentChatId(newChatId);
+      console.log("lhf chats after creating new chat", [newChat]);
+      setIsWaitingForReply(false); // 立即解锁
     } else if (currentChatId) {
+      console.log("lhf sendMessage: updating existing chat", currentChatId);
       // 更新现有聊天记录
-      setChats((prev) =>
-        prev.map((chat) => {
+      setChats((prev) => {
+        const result = prev.map((chat) => {
           if (chat.id === currentChatId) {
-            const updatedMessages = [...chat.messages, newMessage]
             return {
               ...chat,
-              messages: updatedMessages,
+              messages: [...chat.messages, newMessage],
               lastMessage: inputValue,
               timestamp: new Date(),
-            }
+            };
           }
-          return chat
-        }),
-      )
+          return chat;
+        });
+        console.log("lhf chats after updating existing chat", result);
+        return result;
+      });
+      setIsWaitingForReply(false); // 立即解锁
     }
 
     setInputValue("")
@@ -474,16 +477,16 @@ export default function MultimodalChatbot() {
 
   // 语音录制
   const toggleRecording = async () => {
-    console.log('toggleRecording called, isRecording:', isRecording);
+    console.log('lhf toggleRecording called, isRecording:', isRecording);
     if (isRecording) {
       // 关闭麦克风
       try {
-        console.log('尝试关闭麦克风');
+        console.log('lhf 尝试关闭麦克风');
         await room.localParticipant.setMicrophoneEnabled(false);
         setIsRecording(false);
-        console.log('麦克风已关闭');
+        console.log('lhf 麦克风已关闭');
       } catch (error) {
-        console.error('关闭麦克风失败', error);
+        console.error('lhf 关闭麦克风失败', error);
         toastAlert({
           title: "关闭麦克风失败",
           description: error instanceof Error && error.message ? error.message : String(error) || "请检查设备权限",
@@ -491,10 +494,10 @@ export default function MultimodalChatbot() {
       }
     } else {
       // 检查设备
-      console.log('尝试检测麦克风设备');
+      console.log('lhf 尝试检测麦克风设备');
       const devices = await navigator.mediaDevices.enumerateDevices();
       const hasMic = devices.some((d) => d.kind === "audioinput");
-      console.log('检测结果 hasMic:', hasMic, devices);
+      console.log('lhf 检测结果 hasMic:', hasMic, devices);
       if (!hasMic) {
         toastAlert({
           title: "未检测到麦克风",
@@ -504,12 +507,12 @@ export default function MultimodalChatbot() {
       }
       // 打开麦克风
       try {
-        console.log('尝试打开麦克风');
+        console.log('lhf 尝试打开麦克风');
         await room.localParticipant.setMicrophoneEnabled(true);
         setIsRecording(true);
-        console.log('麦克风已打开');
+        console.log('lhf 麦克风已打开');
       } catch (error) {
-        console.error('麦克风授权失败', error);
+        console.error('lhf 麦克风授权失败', error);
         toastAlert({
           title: "麦克风授权失败",
           description: error instanceof Error && error.message ? error.message : String(error) || "请检查设备权限",
@@ -535,20 +538,32 @@ export default function MultimodalChatbot() {
     }
 
     // 如果是临时聊天状态，需要先创建真正的聊天记录
-    if (isInTempChat && tempChat) {
-      const realChat: Chat = {
+    if (tempChat) { // 如果当前是临时聊天，则新建一个
+      const firstMessageTitle = `文件: ${file.name.slice(0, 20)}`;
+      const newChatId = `chat_${Date.now()}`;
+      const mergedChat: Chat = {
         ...tempChat,
+        id: newChatId,
+        title: firstMessageTitle,
         messages: [...tempChat.messages, fileMessage],
         lastMessage: `文件: ${file.name}`,
         timestamp: new Date(),
-        title: `文件: ${file.name.slice(0, 20)}`, // 使用文件名作为标题
-      }
-
-      // 添加到聊天记录
-      setChats((prev) => [realChat, ...prev])
-      setCurrentChatId(realChat.id)
-      setIsInTempChat(false)
-      setTempChat(null)
+      };
+      setChats((prev) => [mergedChat, ...prev]);
+      setCurrentChatId(newChatId);
+      setTempChat(null);
+    } else if (chats.length === 0) { // 如果当前没有聊天，则新建一个
+      const firstMessageTitle = `文件: ${file.name.slice(0, 20)}`;
+      const newChatId = `chat_${Date.now()}`;
+      const newChat: Chat = {
+        id: newChatId,
+        title: firstMessageTitle,
+        messages: [fileMessage],
+        lastMessage: `文件: ${file.name}`,
+        timestamp: new Date(),
+      };
+      setChats([newChat]);
+      setCurrentChatId(newChatId);
     } else if (currentChatId) {
       // 更新现有聊天记录
       setChats((prev) =>
@@ -650,9 +665,128 @@ export default function MultimodalChatbot() {
     setAppUser(null)
     setChats([])
     setCurrentChatId(null)
-    setIsInTempChat(false)
-    setTempChat(null)
     localStorage.removeItem("chatbot_user")
+  }
+
+  // 事件处理函数提前
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed)
+  }
+
+  // 发送预设消息
+  const sendPresetMessage = (question: string) => {
+    setIsWaitingForReply(true)
+    const firstMessageTitle = question.trim().slice(0, 30);
+    const newMessage: Message = {
+      id: `msg_${Date.now()}`,
+      content: question,
+      sender: "user",
+      timestamp: new Date(),
+      type: "text",
+    }
+    if (tempChat) {
+      const mergedChat: Chat = {
+        ...tempChat,
+        title: firstMessageTitle || "新对话",
+        messages: [...tempChat.messages, newMessage],
+        lastMessage: question,
+        timestamp: new Date(),
+      };
+      setChats((prev) => [mergedChat, ...prev]);
+      setCurrentChatId(mergedChat.id);
+      setTempChat(null);
+    } else if (chats.length === 0) {
+      const newChatId = `chat_${Date.now()}`;
+      const newChat: Chat = {
+        id: newChatId,
+        title: firstMessageTitle || "新对话",
+        messages: [newMessage],
+        lastMessage: question,
+        timestamp: new Date(),
+      };
+      setChats([newChat]);
+      setCurrentChatId(newChatId);
+    } else if (currentChatId) {
+      setChats((prev) =>
+        prev.map((chat) => {
+          if (chat.id === currentChatId) {
+            return {
+              ...chat,
+              messages: [...chat.messages, newMessage],
+              lastMessage: question,
+              timestamp: new Date(),
+            };
+          }
+          return chat;
+        }),
+      );
+    }
+    setInputValue("");
+    setTimeout(() => {
+      const botReply: Message = {
+        id: `msg_${Date.now() + 1}`,
+        content: "这是一个预设答案，用于测试。", // 实际预设答案需要从后端获取
+        sender: "bot",
+        timestamp: new Date(),
+        type: "text",
+      }
+      setChats((prev) =>
+        prev.map((chat) => {
+          if (chat.id === currentChatId) {
+            return {
+              ...chat,
+              messages: [...chat.messages, botReply],
+            }
+          }
+          return chat
+        }),
+      )
+      setIsWaitingForReply(false)
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 100)
+    }, 1000)
+  }
+
+  // 新建对话时，创建 tempChat（AI欢迎语），currentChatId=null
+  const createNewChat = (presetQuestion?: string) => {
+    connectRoom();
+    const newChatId = `chat_${Date.now()}`;
+    const welcomeMsg: Message = {
+      id: `msg_${Date.now()}`,
+      content: "您好！我是您的Spark AI助手，有任何关于Spark公寓的问题都可以咨询我。",
+      sender: "bot",
+      timestamp: new Date(),
+      type: "text",
+    };
+    const newTempChat: Chat = {
+      id: newChatId,
+      title: "新对话",
+      messages: [welcomeMsg],
+      lastMessage: "",
+      timestamp: new Date(),
+    };
+    setTempChat(newTempChat);
+    setCurrentChatId(null);
+    setInputValue(presetQuestion || "");
+    setTimeout(() => {
+      inputRef.current?.focus();
+      if (presetQuestion) {
+        sendPresetMessage(presetQuestion);
+      }
+    }, 100);
+  };
+
+  const selectChat = (chatId: string) => {
+    setCurrentChatId(chatId)
+    setTimeout(() => {
+      scrollToBottom()
+      inputRef.current?.focus()
+    }, 200)
+  }
+
+  const backToWelcome = () => {
+    setCurrentChatId(null)
   }
 
   return (
@@ -881,6 +1015,21 @@ export default function MultimodalChatbot() {
                     </div>
                   </div>
                 ))}
+                {/* AI思考中loading气泡 */}
+                {isWaitingForReply && (
+                  <div className="flex items-start space-x-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback>
+                        <Bot className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col space-y-1 max-w-[70%]">
+                      <div className="rounded-lg px-4 py-2 bg-muted animate-pulse">
+                        <span className="text-sm text-muted-foreground">AI正在思考...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {/* 用于自动滚动到底部的锚点 */}
                 <div ref={messagesEndRef} />
               </div>
@@ -926,10 +1075,17 @@ export default function MultimodalChatbot() {
                       placeholder={
                         isWaitingForReply ? "等待AI回复中..." : isRecording ? "正在语音对话中..." : "输入消息..."
                       }
-                      onKeyPress={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey && !isWaitingForReply && !isRecording) {
-                          e.preventDefault()
-                          sendMessage()
+                      onKeyDown={(e) => {
+                        console.log("lhf onKeyDown", e.key, (e.nativeEvent as any).isComposing, isWaitingForReply, isRecording);
+                        if (
+                          e.key === "Enter" &&
+                          !e.shiftKey &&
+                          !isWaitingForReply &&
+                          !isRecording &&
+                          !(e.nativeEvent as any).isComposing
+                        ) {
+                          e.preventDefault();
+                          sendMessage();
                         }
                       }}
                       className="pr-12"
@@ -937,7 +1093,9 @@ export default function MultimodalChatbot() {
                     />
                     <Button
                       size="icon"
-                      onClick={sendMessage}
+                      onClick={() => {
+                        if (!isWaitingForReply && !isRecording && inputValue.trim()) sendMessage();
+                      }}
                       disabled={!inputValue.trim() || isWaitingForReply || isRecording}
                       className="absolute right-1 top-1 h-8 w-8"
                     >
