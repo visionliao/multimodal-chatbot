@@ -100,8 +100,8 @@ export default function MultimodalChatbot() {
 
   // 记录已插入的转录消息ID，避免重复
   const insertedTranscriptionIds = useRef<Set<string>>(new Set());
-  // 记录发送消息的时间戳
-  const [lastUserMessageTimestamp, setLastUserMessageTimestamp] = useState<number | null>(null);
+  // 记录最后一条livekit回复消息和当前聊天id
+  const lastBotMessage = useRef<{ message: string; chatId: string | null } | null>(null);
 
   // 从localStorage恢复用户信息
   useEffect(() => {
@@ -155,21 +155,21 @@ export default function MultimodalChatbot() {
       .slice(-1)[0]; // 只取最后一条
 
     if (!botStream || !botStream.message) return;
-
-    // 如果没有 lastUserMessageTimestamp，说明还没发过消息，直接返回
-    if (!lastUserMessageTimestamp) {
-      console.log("lhf ❌ 没有用户发送消息的时间戳，不处理");
-      return;
-    }
-    // 判断 bot 回复的时间是否太早（可能是缓存消息）
-    const timeDiff = Date.now() - lastUserMessageTimestamp;
-    console.log("lhf ✅ 收到最后一条消息时间间隔:", timeDiff, "ms");
-    if (timeDiff < 1000) {
-      console.log("lhf 🚫 忽略缓存回复，时间间隔太短:", timeDiff, "ms");
-      return; // ❌ 是缓存消息，不插入 UI
-    }
     console.log('lhf livekit 最后一条消息:', botStream.message);
-    console.log('lhf livekit 最后一条消息时间:', botStream.timestamp);
+    // 判断是否是上一个聊天的缓存消息，因为监听livekitMessages，只要发送消息会马上获得上一次最后的流式数据
+    if (
+      lastBotMessage.current &&
+      lastBotMessage.current.message === botStream.message &&
+      lastBotMessage.current.chatId !== currentChatId
+    ) {
+      console.log("lhf 忽略历史缓存消息:", botStream.message);
+      return; //属于上一个聊天的消息，不插入 UI
+    }
+    // 是新的消息 or 属于当前聊天的消息，更新 lastBotMessage
+    lastBotMessage.current = {
+      message: botStream.message,
+      chatId: currentChatId,
+    };
 
     setChats(prev =>
       prev.map(chat => {
@@ -380,12 +380,11 @@ export default function MultimodalChatbot() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     inputRef.current?.focus();
   }, 100);
-}, [livekitMessages, currentChatId, room, tempChat]);
+}, [livekitMessages, room, tempChat]);
 
   // 发送消息
   const sendMessage = async () => {
     console.log('lhf 发送消息 currentChatId:', currentChatId);
-    setLastUserMessageTimestamp(Date.now()); // 记录发送时间
     console.log("lhf sendMessage called", { inputValue, isWaitingForReply, tempChat, chatsLength: chats.length, currentChatId });
     if (!inputValue.trim() || isWaitingForReply) return;
     setIsWaitingForReply(true);
