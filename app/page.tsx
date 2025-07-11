@@ -140,7 +140,7 @@ export default function MultimodalChatbot() {
     }
   }, [currentChatId])
 
-  // 替换监听 livekitMessages 的 useEffect：
+  // 监听livekit回复的语音转文本useEffect：
   useEffect(() => {
     if (!currentChatId) return;
     const currentChat = chats.find(chat => chat.id === currentChatId);
@@ -199,18 +199,31 @@ export default function MultimodalChatbot() {
   useEffect(() => {
     if (!room || !room.localParticipant) return;
     const myIdentity = room.localParticipant.identity;
-    // 只处理 isTranscription 为 true 的消息，避免文本输入被重复插入
+
+    // 只处理 isTranscription 为 true 的消息
     const myTranscriptions = livekitMessages.filter(
       (msg) =>
         msg.from &&
         msg.from.identity === myIdentity &&
         msg.message &&
-        !insertedTranscriptionIds.current.has(msg.id) &&
         (msg as any).isTranscription
     );
+    console.log('lhf 当前用户的语音转文字消息:', myTranscriptions);
     if (!myTranscriptions.length) return;
+
+    // 逐条处理语音片段，确保触发 AI 回复等逻辑
     myTranscriptions.forEach((msg) => {
-      console.log("lhf livekitMessages: 111", msg);
+      if (insertedTranscriptionIds.current.has(msg.id)) {
+        console.log("lhf 已处理过该语音片段，跳过:", msg.id);
+        return;
+      }
+
+      console.log("lhf 正在处理语音片段:", msg);
+
+      // 标记为已处理
+      insertedTranscriptionIds.current.add(msg.id);
+
+      // 每次插入都会触发 setChats，从而触发下游逻辑（如 AI 回复）
       setChats((prevChats) => {
         if (tempChat) {
           const firstMessageTitle = msg.message.trim().slice(0, 30);
@@ -246,11 +259,9 @@ export default function MultimodalChatbot() {
             lastMessage: msg.message,
             timestamp: new Date(),
           };
-          console.log("lhf livekitMessages: 222", msg);
           setCurrentChatId(newChatId);
           return [newChat];
         } else if (currentChatId) {
-          console.log("lhf livekitMessages: 333", msg);
           return prevChats.map((chat) => {
             if (chat.id === currentChatId) {
               const alreadyExists = chat.messages.some((m) => m.id === msg.id);
@@ -300,14 +311,58 @@ export default function MultimodalChatbot() {
           return chat;
         });
       });
-      console.log("lhf livekitMessages: 444", msg);
-      insertedTranscriptionIds.current.add(msg.id);
+  });
+
+  // UI 显示更新部分：只显示最后一条语音内容
+  const lastTranscription = myTranscriptions[myTranscriptions.length - 1];
+  const transcriptionId = lastTranscription.id;
+  const fullText = lastTranscription.message;
+
+  console.log(`lhf 语音转文字的唯一ID: ${transcriptionId}`);
+  console.log(`lhf 拼接后的完整文本: "${fullText}"`);
+
+  setChats((prevChats) => {
+    return prevChats.map((chat) => {
+      if (chat.id !== currentChatId) return chat;
+      // 查找是否已有该转录id的气泡
+      const idx = chat.messages.findIndex(
+        (m) => m.id === transcriptionId && m.sender === "user" && m.type === "text"
+      );
+      if (idx !== -1) {
+        // 更新内容
+        const newMessages = [...chat.messages];
+        newMessages[idx] = {
+          ...newMessages[idx],
+          content: fullText,
+          timestamp: new Date(),
+        };
+        return { ...chat, messages: newMessages, lastMessage: fullText, timestamp: new Date() };
+      } else {
+        // 插入新气泡（只在没有时插入）
+        return {
+          ...chat,
+          messages: [
+            ...chat.messages,
+            {
+              id: transcriptionId,
+              content: fullText,
+              sender: "user",
+              timestamp: new Date(),
+              type: "text",
+            },
+          ],
+          lastMessage: fullText,
+          timestamp: new Date(),
+        };
+      }
     });
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      inputRef.current?.focus();
-    }, 100);
-  }, [livekitMessages, currentChatId, room, tempChat]);
+  });
+
+  setTimeout(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    inputRef.current?.focus();
+  }, 100);
+}, [livekitMessages, currentChatId, room, tempChat]);
 
   // 发送消息
   const sendMessage = async () => {
