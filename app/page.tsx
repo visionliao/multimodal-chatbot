@@ -100,6 +100,8 @@ export default function MultimodalChatbot() {
 
   // 记录已插入的转录消息ID，避免重复
   const insertedTranscriptionIds = useRef<Set<string>>(new Set());
+  // 记录发送消息的时间戳
+  const [lastUserMessageTimestamp, setLastUserMessageTimestamp] = useState<number | null>(null);
 
   // 从localStorage恢复用户信息
   useEffect(() => {
@@ -142,6 +144,7 @@ export default function MultimodalChatbot() {
 
   // 监听livekit回复的语音转文本useEffect：
   useEffect(() => {
+    console.log('lhf livekit语音转文本 currentChatId:', currentChatId);
     if (!currentChatId) return;
     const currentChat = chats.find(chat => chat.id === currentChatId);
     if (!currentChat) return;
@@ -152,6 +155,21 @@ export default function MultimodalChatbot() {
       .slice(-1)[0]; // 只取最后一条
 
     if (!botStream || !botStream.message) return;
+
+    // 如果没有 lastUserMessageTimestamp，说明还没发过消息，直接返回
+    if (!lastUserMessageTimestamp) {
+      console.log("lhf ❌ 没有用户发送消息的时间戳，不处理");
+      return;
+    }
+    // 判断 bot 回复的时间是否太早（可能是缓存消息）
+    const timeDiff = Date.now() - lastUserMessageTimestamp;
+    console.log("lhf ✅ 收到最后一条消息时间间隔:", timeDiff, "ms");
+    if (timeDiff < 1000) {
+      console.log("lhf 🚫 忽略缓存回复，时间间隔太短:", timeDiff, "ms");
+      return; // ❌ 是缓存消息，不插入 UI
+    }
+    console.log('lhf livekit 最后一条消息:', botStream.message);
+    console.log('lhf livekit 最后一条消息时间:', botStream.timestamp);
 
     setChats(prev =>
       prev.map(chat => {
@@ -193,7 +211,7 @@ export default function MultimodalChatbot() {
         return chat;
       })
     );
-  }, [livekitMessages, currentChatId, room]);
+  }, [livekitMessages, room]);
 
   // 监听用户自己的语音转文字消息，插入到聊天流
   useEffect(() => {
@@ -366,6 +384,8 @@ export default function MultimodalChatbot() {
 
   // 发送消息
   const sendMessage = async () => {
+    console.log('lhf 发送消息 currentChatId:', currentChatId);
+    setLastUserMessageTimestamp(Date.now()); // 记录发送时间
     console.log("lhf sendMessage called", { inputValue, isWaitingForReply, tempChat, chatsLength: chats.length, currentChatId });
     if (!inputValue.trim() || isWaitingForReply) return;
     setIsWaitingForReply(true);
@@ -807,6 +827,7 @@ export default function MultimodalChatbot() {
   const createNewChat = (presetQuestion?: string) => {
     connectRoom();
     const newChatId = `chat_${Date.now()}`;
+    console.log('lhf 新建聊天窗口 newChatId:', newChatId);
     const welcomeMsg: Message = {
       id: `msg_${Date.now()}`,
       content: "您好！我是您的Spark AI助手，有任何关于Spark公寓的问题都可以咨询我。",
@@ -833,6 +854,7 @@ export default function MultimodalChatbot() {
   };
 
   const selectChat = (chatId: string) => {
+    console.log('lhf 切换聊天窗口 chatId:', chatId);
     setCurrentChatId(chatId)
     setTimeout(() => {
       scrollToBottom()
