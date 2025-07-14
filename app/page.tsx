@@ -942,7 +942,7 @@ export default function MultimodalChatbot() {
               )}
             </ScrollArea>
 
-            {/* 登录区域 */}
+            {/* 登录/已登录区域 */}
             <div className="p-4 border-t">
               {user ? (
                 <div className="flex items-center justify-between">
@@ -954,22 +954,34 @@ export default function MultimodalChatbot() {
                       {user.nickname?.trim() || user.username?.trim() || user.name?.trim() || user.email}
                     </span>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={async () => {
-                    await signOut({ redirect: false });
-                    window.location.href = '/';
-                  }} title="退出登录">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title="退出登录"
+                    onClick={async () => {
+                      if (room && room.state !== 'disconnected') {
+                        try { await room.disconnect(); } catch (e) { console.error('断开 livekit 失败', e); }
+                      }
+                      await signOut({ redirect: false });
+                      window.location.href = '/';
+                    }}
+                  >
                     <LogOut className="h-4 w-4" />
                   </Button>
                 </div>
               ) : (
                 <Button
-                  variant="outline"
-                  className="w-full bg-transparent"
+                  variant="ghost"
                   size="sm"
-                  onClick={() => signIn(undefined, { callbackUrl: "/" })}
+                  className="w-full justify-start"
+                  onClick={async () => {
+                    if (room && room.state !== 'disconnected') {
+                      try { await room.disconnect(); } catch (e) { console.error('断开 livekit 失败', e); }
+                    }
+                    signIn(undefined, { callbackUrl: '/login' });
+                  }}
                 >
-                  <LogIn className="h-4 w-4 mr-2" />
-                  登录
+                  <LogIn className="h-4 w-4 mr-2" /> 登录
                 </Button>
               )}
             </div>
