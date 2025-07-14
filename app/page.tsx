@@ -924,14 +924,14 @@ export default function MultimodalChatbot() {
                                   size="icon"
                                   variant="ghost"
                                   className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent"
-                                  onClick={(e) => e.stopPropagation()}
+                                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => e.stopPropagation()}
                                 >
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
-                                  onClick={(e) => {
+                                  onClick={(e: React.MouseEvent<HTMLDivElement>) => {
                                     e.stopPropagation()
                                     setSelectedChatId(chat.id)
                                     setNewTitle(chat.title)
@@ -942,7 +942,7 @@ export default function MultimodalChatbot() {
                                   重命名
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={(e) => {
+                                  onClick={(e: React.MouseEvent<HTMLDivElement>) => {
                                     e.stopPropagation()
                                     setSelectedChatId(chat.id)
                                     setShowDeleteDialog(true)
