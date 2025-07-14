@@ -5,43 +5,30 @@ import { Form } from '@/components/login_form';
 import { SubmitButton } from '@/components/submit-button';
 import { Toast, useToast } from '@/components/toast';
 import { useRouter } from 'next/navigation';
+import { signIn } from "next-auth/react";
 
 export function LoginFormClient() {
   const { toast, showToast, hideToast } = useToast();
   const router = useRouter();
 
   const handleLogin = async (formData: FormData, event?: React.FormEvent<HTMLFormElement>) => {
-    try {
-      const email = formData.get('email') as string;
-      const password = formData.get('password') as string;
+    event?.preventDefault();
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
 
-      // 因数据库操作只能在服务端进行，此处路由到服务端
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+    const res = await signIn("credentials", {
+      redirect: false,
+      email,
+      password,
+    });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        showToast('登录成功！', 'success');
-        setTimeout(() => {
-          router.push('/');
-        }, 1000); // 1.0秒后跳转
-      } else {
-        showToast(data.error || '登录失败', 'error');
-        // 登录失败时清空表单
-        if (event?.target) {
-          const form = event.target as HTMLFormElement;
-          form.reset();
-        }
-      }
-    } catch {
-      showToast('登录失败', 'error');
-      // 异常时也清空表单
+    if (res?.ok) {
+      showToast('登录成功！', 'success');
+      setTimeout(() => {
+        router.push('/');
+      }, 1000);
+    } else {
+      showToast('登录失败，账号或密码错误', 'error');
       if (event?.target) {
         const form = event.target as HTMLFormElement;
         form.reset();
