@@ -100,6 +100,10 @@ export default function MultimodalChatbot() {
   // 增加临时对话 tempChat 状态
   const [tempChat, setTempChat] = useState<Chat | null>(null);
 
+  // 新增：修改昵称弹窗状态和输入
+  const [showNicknameDialog, setShowNicknameDialog] = useState(false);
+  const [newNickname, setNewNickname] = useState("");
+
   const { room, connected, connectRoom } = useLiveKit()
   const { send, messages: livekitMessages } = useChatAndTranscription();
 
@@ -972,7 +976,12 @@ export default function MultimodalChatbot() {
               {user ? (
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
-                    <div className="h-8 w-8 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 shadow">
+                    <div
+                      className="h-8 w-8 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 shadow"
+                      title="修改昵称"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setShowNicknameDialog(true)}
+                    >
                       <User className="h-4 w-4 text-white" />
                     </div>
                     <span className="text-sm font-medium">
@@ -1252,6 +1261,42 @@ export default function MultimodalChatbot() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* 修改昵称弹窗 */}
+        <Dialog open={showNicknameDialog} onOpenChange={setShowNicknameDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-center w-full">修改昵称</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="text-base font-medium">当前昵称</div>
+              {!(user?.nickname?.trim()) ? (
+                <div className="text-muted-foreground">还没有昵称</div>
+              ) : (
+                <div className="text-primary font-semibold">{user.nickname}</div>
+              )}
+              <div className="text-base font-medium mt-2">新昵称</div>
+              <Input
+                value={newNickname}
+                onChange={e => setNewNickname(e.target.value)}
+                placeholder="请输入新昵称"
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  // 这里应调用后端API修改昵称，暂用alert模拟
+                  if (!newNickname.trim()) return;
+                  alert(`新昵称：${newNickname}`);
+                  setShowNicknameDialog(false);
+                  setNewNickname("");
+                }}
+              >
+                确定
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
   )
 }
