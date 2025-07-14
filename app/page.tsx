@@ -841,6 +841,25 @@ export default function MultimodalChatbot() {
 
   return (
     <div className="flex h-screen bg-background">
+      {/* 左下角浮动图标按钮，仅在侧边栏关闭时显示 */}
+      {sidebarCollapsed && (
+        <div
+          className="fixed left-4 bottom-4 w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg cursor-pointer z-50"
+          title="展开侧边栏"
+          onClick={toggleSidebar}
+        >
+          {user ? (
+            <span className="text-white text-lg font-bold select-none">
+              {(() => {
+                const ch = (user.nickname?.trim() || user.username?.trim() || user.name?.trim() || user.email?.trim() || "")[0] || "";
+                return /[a-zA-Z]/.test(ch) ? ch.toUpperCase() : ch;
+              })()}
+            </span>
+          ) : (
+            <User className="h-6 w-6 text-white" />
+          )}
+        </div>
+      )}
         {/* 左侧边栏 - 可收起 */}
         <div
           className={`
