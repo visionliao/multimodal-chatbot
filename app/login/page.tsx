@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { Sparkles } from "lucide-react";
 import { LoginFormClient } from "@/components/login-form-client";
 
 function HomeIconButton() {
@@ -9,9 +10,7 @@ function HomeIconButton() {
       title="回到主界面"
       onClick={() => window.location.href = '/'}
     >
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5 text-white">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364-6.364l-1.414 1.414M6.343 17.657l-1.414 1.414m12.728 0l-1.414-1.414M6.343 6.343L4.929 4.929" />
-      </svg>
+      <Sparkles className="h-5 w-5 text-white" />
     </div>
   );
 }
