@@ -947,16 +947,14 @@ export default function MultimodalChatbot() {
               {user ? (
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback>
-                        <User className="h-4 w-4" />
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="h-8 w-8 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 shadow">
+                      <User className="h-4 w-4 text-white" />
+                    </div>
                     <span className="text-sm font-medium">
                       {user.nickname?.trim() || user.username?.trim() || user.name?.trim() || user.email}
                     </span>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => signOut()}>
+                  <Button variant="ghost" size="sm" onClick={() => signOut()} title="退出登录">
                     <LogOut className="h-4 w-4" />
                   </Button>
                 </div>
