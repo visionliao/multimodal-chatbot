@@ -42,6 +42,7 @@ import { WelcomeScreen } from "@/components/welcome-screen"
 import { useLiveKit } from "@/components/livekit/LiveKitProvider"
 import useChatAndTranscription from "@/hooks/useChatAndTranscription";
 import { toastAlert } from "@/components/ui/alert-toast";
+import { signIn, signOut, useSession, SessionProvider } from "next-auth/react"
 
 
 interface Message {
@@ -70,7 +71,6 @@ interface AppUser {
 
 export default function MultimodalChatbot() {
   // 基础状态 - 默认没有聊天记录
-  const [appUser, setAppUser] = useState<AppUser | null>(null)
   // 聊天主逻辑
   const [chats, setChats] = useState<Chat[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
@@ -82,7 +82,6 @@ export default function MultimodalChatbot() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   // 对话框状态
-  const [showAuthDialog, setShowAuthDialog] = useState(false)
   const [showRenameDialog, setShowRenameDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [selectedChatId, setSelectedChatId] = useState<string>("")
@@ -103,18 +102,9 @@ export default function MultimodalChatbot() {
   // 记录最后一条livekit回复消息和当前聊天id
   const lastBotMessage = useRef<{ message: string; chatId: string | null } | null>(null);
 
-  // 从localStorage恢复用户信息
-  useEffect(() => {
-    const savedUser = localStorage.getItem("chatbot_user")
-    if (savedUser) {
-      try {
-        setAppUser(JSON.parse(savedUser))
-      } catch (error) {
-        console.error("Failed to parse saved user:", error)
-        localStorage.removeItem("chatbot_user")
-      }
-    }
-  }, [])
+  const { data: session, status } = useSession();
+  // 类型断言扩展 user 字段
+  const user = session && session.user ? (session.user as typeof session.user & { nickname?: string; username?: string }) : undefined;
 
   // currentChat 优先 tempChat，否则用 chats+currentChatId
   const currentChat = tempChat ? tempChat : chats.find((chat) => chat.id === currentChatId);
@@ -726,22 +716,6 @@ export default function MultimodalChatbot() {
 
   const chatGroups = groupChatsByTime(chats)
 
-  // 登录处理
-  const handleLogin = (userData: AppUser) => {
-    setAppUser(userData)
-    // 保存到localStorage
-    localStorage.setItem("chatbot_user", JSON.stringify(userData))
-    // 这里可以加载用户的聊天记录
-  }
-
-  // 登出处理
-  const handleLogout = () => {
-    setAppUser(null)
-    setChats([])
-    setCurrentChatId(null)
-    localStorage.removeItem("chatbot_user")
-  }
-
   // 事件处理函数提前
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed)
@@ -867,382 +841,379 @@ export default function MultimodalChatbot() {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* 左侧边栏 - 可收起 */}
-      <div
-        className={`
-          relative bg-muted/30 border-r flex flex-col transition-all duration-300 ease-in-out
-          ${sidebarCollapsed ? "w-0 overflow-hidden" : "w-80"}
-        `}
-      >
-        {/* 收起/展开按钮 */}
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={toggleSidebar}
+        {/* 左侧边栏 - 可收起 */}
+        <div
           className={`
-            absolute top-1/2 -translate-y-1/2 -right-3 z-10 h-6 w-6 rounded-full border bg-background shadow-md
-            hover:bg-accent transition-all duration-200
+            relative bg-muted/30 border-r flex flex-col transition-all duration-300 ease-in-out
+            ${sidebarCollapsed ? "w-0 overflow-hidden" : "w-80"}
           `}
-          title={sidebarCollapsed ? "展开聊天记录" : "收起聊天记录"}
         >
-          {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
+          {/* 收起/展开按钮 */}
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={toggleSidebar}
+            className={`
+              absolute top-1/2 -translate-y-1/2 -right-3 z-10 h-6 w-6 rounded-full border bg-background shadow-md
+              hover:bg-accent transition-all duration-200
+            `}
+            title={sidebarCollapsed ? "展开聊天记录" : "收起聊天记录"}
+          >
+            {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
 
-        {/* 侧边栏内容 */}
-        <div className="flex flex-col h-full min-w-80">
-          {/* 侧边栏头部 */}
-          <div className="p-4 border-b">
-            <Button
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-full"
-              onClick={() => createNewChat()}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              新建对话
-            </Button>
-          </div>
-
-          <ScrollArea className="flex-1 p-4">
-            {chats.length > 0 ? (
-              <div className="space-y-4">
-                {Object.entries(chatGroups).map(([groupName, chats]) => (
-                  <div key={groupName}>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-2 px-2">{groupName}</h3>
-                    <div className="space-y-1">
-                      {chats.map((chat) => (
-                        <div
-                          key={chat.id}
-                          className={`group cursor-pointer hover:bg-accent rounded-lg p-3 transition-colors relative ${
-                            currentChatId === chat.id ? "bg-accent" : ""
-                          }`}
-                          onClick={() => selectChat(chat.id)}
-                        >
-                          <p className="text-sm truncate pr-10">{chat.title}</p>
-                          <div className="absolute right-1 top-1/2 -translate-y-1/2 z-10">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent"
-                                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => e.stopPropagation()}
-                                >
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={(e: React.MouseEvent<HTMLDivElement>) => {
-                                    e.stopPropagation()
-                                    setSelectedChatId(chat.id)
-                                    setNewTitle(chat.title)
-                                    setShowRenameDialog(true)
-                                  }}
-                                >
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  重命名
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={(e: React.MouseEvent<HTMLDivElement>) => {
-                                    e.stopPropagation()
-                                    setSelectedChatId(chat.id)
-                                    setShowDeleteDialog(true)
-                                  }}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  删除此对话
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center text-muted-foreground py-8">
-                <p className="text-sm">暂无聊天记录</p>
-              </div>
-            )}
-          </ScrollArea>
-
-          {/* 登录区域 */}
-          <div className="p-4 border-t">
-            {appUser ? (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback>
-                      <User className="h-4 w-4" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-medium">{appUser.username}</span>
-                </div>
-                <Button variant="ghost" size="sm" onClick={handleLogout}>
-                  <LogOut className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
+          {/* 侧边栏内容 */}
+          <div className="flex flex-col h-full min-w-80">
+            {/* 侧边栏头部 */}
+            <div className="p-4 border-b">
               <Button
-                variant="outline"
-                className="w-full bg-transparent"
-                size="sm"
-                onClick={() => setShowAuthDialog(true)}
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-full"
+                onClick={() => createNewChat()}
               >
-                <LogIn className="h-4 w-4 mr-2" />
-                登录
+                <Plus className="h-4 w-4 mr-2" />
+                新建对话
               </Button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 展开按钮 - 当侧边栏收起时显示 */}
-      {sidebarCollapsed && (
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={toggleSidebar}
-          className="absolute top-1/2 -translate-y-1/2 left-4 z-10 h-8 w-8 rounded-full border bg-background shadow-md hover:bg-accent"
-          title="展开聊天记录"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      )}
-
-      {/* 主聊天区域 */}
-      <div className="flex-1 flex flex-col">
-        {currentChat ? (
-          <>
-            {/* 聊天头部 */}
-            <div className="border-b p-4">
-              <div className="flex items-center space-x-3">
-                <div
-                  className="relative w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg cursor-pointer hover:shadow-xl transition-all duration-200 hover:scale-105"
-                  onClick={backToWelcome}
-                  title="回到欢迎界面"
-                >
-                  <Sparkles className="h-5 w-5 text-white" />
-                  <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border border-white flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                  </div>
-                </div>
-                <div>
-                  <h1 className="font-semibold">AI助手</h1>
-                  <p className="text-sm text-muted-foreground">
-                    在线 • 支持文本、语音、文档
-                    {appUser && (
-                      <span className="ml-2">
-                        • 已登录为 {appUser.username}
-                        {appUser.phone && ` (${appUser.phone})`}
-                        {appUser.email && ` (${appUser.email})`}
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
             </div>
 
-            {/* 消息区域 */}
             <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4 max-w-4xl mx-auto">
-                {currentChat.messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex items-start space-x-3 ${
-                      message.sender === "user" ? "flex-row-reverse space-x-reverse" : ""
-                    }`}
-                  >
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback>
-                        {message.sender === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                      </AvatarFallback>
-                    </Avatar>
-
-                    <div className={`flex flex-col space-y-1 max-w-[70%]`}>
-                      <div
-                        className={`rounded-lg px-4 py-2 ${
-                          message.sender === "user" ? "bg-primary text-primary-foreground ml-auto" : "bg-muted"
-                        }`}
-                      >
-                        {message.type === "file" && (
-                          <div className="flex items-center space-x-2 mb-1">
-                            <Paperclip className="h-4 w-4" />
-                            <span className="text-sm font-medium">{message.fileName}</span>
+              {chats.length > 0 ? (
+                <div className="space-y-4">
+                  {Object.entries(chatGroups).map(([groupName, chats]) => (
+                    <div key={groupName}>
+                      <h3 className="text-sm font-medium text-muted-foreground mb-2 px-2">{groupName}</h3>
+                      <div className="space-y-1">
+                        {chats.map((chat) => (
+                          <div
+                            key={chat.id}
+                            className={`group cursor-pointer hover:bg-accent rounded-lg p-3 transition-colors relative ${
+                              currentChatId === chat.id ? "bg-accent" : ""
+                            }`}
+                            onClick={() => selectChat(chat.id)}
+                          >
+                            <p className="text-sm truncate pr-10">{chat.title}</p>
+                            <div className="absolute right-1 top-1/2 -translate-y-1/2 z-10">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent"
+                                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => e.stopPropagation()}
+                                  >
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+                                      e.stopPropagation()
+                                      setSelectedChatId(chat.id)
+                                      setNewTitle(chat.title)
+                                      setShowRenameDialog(true)
+                                    }}
+                                  >
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    重命名
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+                                      e.stopPropagation()
+                                      setSelectedChatId(chat.id)
+                                      setShowDeleteDialog(true)
+                                    }}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    删除此对话
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
                           </div>
-                        )}
-                        {message.type === "audio" && (
-                          <div className="flex items-center space-x-2 mb-1">
-                            <Mic className="h-4 w-4" />
-                            <span className="text-sm font-medium">语音消息</span>
-                          </div>
-                        )}
-                        <p className="text-sm whitespace-pre-line">{message.content}</p>
-                      </div>
-                      <span
-                        className={`text-xs text-muted-foreground ${
-                          message.sender === "user" ? "text-right" : "text-left"
-                        }`}
-                      >
-                        {formatTime(message.timestamp)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-                {/* AI思考中loading气泡 */}
-                {isWaitingForReply && (
-                  <div className="flex items-start space-x-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback>
-                        <Bot className="h-4 w-4" />
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col space-y-1 max-w-[70%]">
-                      <div className="rounded-lg px-4 py-2 bg-muted animate-pulse">
-                        <span className="text-sm text-muted-foreground">AI正在思考...</span>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                )}
-                {/* 用于自动滚动到底部的锚点 */}
-                <div ref={messagesEndRef} />
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-muted-foreground py-8">
+                  <p className="text-sm">暂无聊天记录</p>
+                </div>
+              )}
             </ScrollArea>
 
-            {/* 输入区域 */}
-            <div className="border-t p-4">
-              <div className="max-w-4xl mx-auto">
-                {/* 语音提示信息，放在输入框上方 */}
-                {isRecording && (
-                  <div className="mb-2 text-center">
-                    <span className="text-sm text-muted-foreground animate-pulse">
-                      🔴 正在语音对话...点击停止按钮结束本次语音对话
+            {/* 登录区域 */}
+            <div className="p-4 border-t">
+              {user ? (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback>
+                        <User className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-medium">
+                      {user.nickname?.trim() || user.username?.trim() || user.name?.trim() || user.email}
                     </span>
                   </div>
-                )}
-                <div className="flex items-end space-x-2">
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="shrink-0"
-                    disabled={isWaitingForReply || isRecording}
-                  >
-                    <Paperclip className="h-4 w-4" />
+                  <Button variant="ghost" size="sm" onClick={() => signOut()}>
+                    <LogOut className="h-4 w-4" />
                   </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="w-full bg-transparent"
+                  size="sm"
+                  onClick={() => signIn(undefined, { callbackUrl: "/" })}
+                >
+                  <LogIn className="h-4 w-4 mr-2" />
+                  登录
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
 
-                  <Button
-                    size="icon"
-                    variant={isRecording ? "destructive" : "outline"}
-                    onClick={toggleRecording}
-                    className="shrink-0"
-                    disabled={isWaitingForReply && !isRecording}
+        {/* 展开按钮 - 当侧边栏收起时显示 */}
+        {sidebarCollapsed && (
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={toggleSidebar}
+            className="absolute top-1/2 -translate-y-1/2 left-4 z-10 h-8 w-8 rounded-full border bg-background shadow-md hover:bg-accent"
+            title="展开聊天记录"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        )}
+
+        {/* 主聊天区域 */}
+        <div className="flex-1 flex flex-col">
+          {currentChat ? (
+            <>
+              {/* 聊天头部 */}
+              <div className="border-b p-4">
+                <div className="flex items-center space-x-3">
+                  <div
+                    className="relative w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg cursor-pointer hover:shadow-xl transition-all duration-200 hover:scale-105"
+                    onClick={backToWelcome}
+                    title="回到欢迎界面"
                   >
-                    {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                  </Button>
-
-                  <div className="flex-1 relative">
-                    <Input
-                      ref={inputRef}
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      placeholder={
-                        isWaitingForReply ? "等待AI回复中..." : isRecording ? "正在语音对话中..." : "输入消息..."
-                      }
-                      onKeyDown={(e) => {
-                        console.log("lhf onKeyDown", e.key, (e.nativeEvent as any).isComposing, isWaitingForReply, isRecording);
-                        if (
-                          e.key === "Enter" &&
-                          !e.shiftKey &&
-                          !isWaitingForReply &&
-                          !isRecording &&
-                          !(e.nativeEvent as any).isComposing
-                        ) {
-                          e.preventDefault();
-                          sendMessage();
-                        }
-                      }}
-                      className="pr-12"
-                      disabled={isWaitingForReply || isRecording}
-                    />
-                    <Button
-                      size="icon"
-                      onClick={() => {
-                        if (!isWaitingForReply && !isRecording && inputValue.trim()) sendMessage();
-                      }}
-                      disabled={!inputValue.trim() || isWaitingForReply || isRecording}
-                      className="absolute right-1 top-1 h-8 w-8"
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
+                    <Sparkles className="h-5 w-5 text-white" />
+                    <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border border-white flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <h1 className="font-semibold">AI助手</h1>
+                    <p className="text-sm text-muted-foreground">
+                      在线 • 支持文本、语音、文档
+                      {user && (
+                        <span className="ml-2">
+                          • 已登录为 {user.nickname?.trim() || user.username?.trim() || user.name?.trim() || user.email}
+                        </span>
+                      )}
+                    </p>
                   </div>
                 </div>
+              </div>
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                  accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
-                  disabled={isWaitingForReply || isRecording}
+              {/* 消息区域 */}
+              <ScrollArea className="flex-1 p-4">
+                <div className="space-y-4 max-w-4xl mx-auto">
+                  {currentChat.messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex items-start space-x-3 ${
+                        message.sender === "user" ? "flex-row-reverse space-x-reverse" : ""
+                      }`}
+                    >
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback>
+                          {message.sender === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                        </AvatarFallback>
+                      </Avatar>
+
+                      <div className={`flex flex-col space-y-1 max-w-[70%]`}>
+                        <div
+                          className={`rounded-lg px-4 py-2 ${
+                            message.sender === "user" ? "bg-primary text-primary-foreground ml-auto" : "bg-muted"
+                          }`}
+                        >
+                          {message.type === "file" && (
+                            <div className="flex items-center space-x-2 mb-1">
+                              <Paperclip className="h-4 w-4" />
+                              <span className="text-sm font-medium">{message.fileName}</span>
+                            </div>
+                          )}
+                          {message.type === "audio" && (
+                            <div className="flex items-center space-x-2 mb-1">
+                              <Mic className="h-4 w-4" />
+                              <span className="text-sm font-medium">语音消息</span>
+                            </div>
+                          )}
+                          <p className="text-sm whitespace-pre-line">{message.content}</p>
+                        </div>
+                        <span
+                          className={`text-xs text-muted-foreground ${
+                            message.sender === "user" ? "text-right" : "text-left"
+                          }`}
+                        >
+                          {formatTime(message.timestamp)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {/* AI思考中loading气泡 */}
+                  {isWaitingForReply && (
+                    <div className="flex items-start space-x-3">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback>
+                          <Bot className="h-4 w-4" />
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col space-y-1 max-w-[70%]">
+                        <div className="rounded-lg px-4 py-2 bg-muted animate-pulse">
+                          <span className="text-sm text-muted-foreground">AI正在思考...</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {/* 用于自动滚动到底部的锚点 */}
+                  <div ref={messagesEndRef} />
+                </div>
+              </ScrollArea>
+
+              {/* 输入区域 */}
+              <div className="border-t p-4">
+                <div className="max-w-4xl mx-auto">
+                  {/* 语音提示信息，放在输入框上方 */}
+                  {isRecording && (
+                    <div className="mb-2 text-center">
+                      <span className="text-sm text-muted-foreground animate-pulse">
+                        🔴 正在语音对话...点击停止按钮结束本次语音对话
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-end space-x-2">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="shrink-0"
+                      disabled={isWaitingForReply || isRecording}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+
+                    <Button
+                      size="icon"
+                      variant={isRecording ? "destructive" : "outline"}
+                      onClick={toggleRecording}
+                      className="shrink-0"
+                      disabled={isWaitingForReply && !isRecording}
+                    >
+                      {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                    </Button>
+
+                    <div className="flex-1 relative">
+                      <Input
+                        ref={inputRef}
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        placeholder={
+                          isWaitingForReply ? "等待AI回复中..." : isRecording ? "正在语音对话中..." : "输入消息..."
+                        }
+                        onKeyDown={(e) => {
+                          console.log("lhf onKeyDown", e.key, (e.nativeEvent as any).isComposing, isWaitingForReply, isRecording);
+                          if (
+                            e.key === "Enter" &&
+                            !e.shiftKey &&
+                            !isWaitingForReply &&
+                            !isRecording &&
+                            !(e.nativeEvent as any).isComposing
+                          ) {
+                            e.preventDefault();
+                            sendMessage();
+                          }
+                        }}
+                        className="pr-12"
+                        disabled={isWaitingForReply || isRecording}
+                      />
+                      <Button
+                        size="icon"
+                        onClick={() => {
+                          if (!isWaitingForReply && !isRecording && inputValue.trim()) sendMessage();
+                        }}
+                        disabled={!inputValue.trim() || isWaitingForReply || isRecording}
+                        className="absolute right-1 top-1 h-8 w-8"
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                    accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                    disabled={isWaitingForReply || isRecording}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <WelcomeScreen onStartChat={createNewChat} />
+          )}
+        </div>
+
+        {/* 重命名对话框 */}
+        <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>重命名对话</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="chat-title">对话标题</Label>
+                <Input
+                  id="chat-title"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="请输入新的对话标题"
                 />
               </div>
             </div>
-          </>
-        ) : (
-          <WelcomeScreen onStartChat={createNewChat} />
-        )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowRenameDialog(false)}>
+                取消
+              </Button>
+              <Button onClick={renameChat}>确认</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 删除确认对话框 */}
+        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>确认删除</AlertDialogTitle>
+              <AlertDialogDescription>您确定要删除这个对话吗？此操作无法撤销。</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={deleteChat}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                删除
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
-
-      {/* 登录注册对话框 */}
-      <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} onLogin={handleLogin} />
-
-      {/* 重命名对话框 */}
-      <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>重命名对话</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="chat-title">对话标题</Label>
-              <Input
-                id="chat-title"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="请输入新的对话标题"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRenameDialog(false)}>
-              取消
-            </Button>
-            <Button onClick={renameChat}>确认</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 删除确认对话框 */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>确认删除</AlertDialogTitle>
-            <AlertDialogDescription>您确定要删除这个对话吗？此操作无法撤销。</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={deleteChat}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              删除
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
   )
 }

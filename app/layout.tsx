@@ -4,6 +4,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { LiveKitProvider } from "@/components/livekit/LiveKitProvider"
 import { Toaster } from '@/components/ui/sonner';
+import SessionLayout from "./session-layout"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -21,9 +22,11 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body>
-        <LiveKitProvider>
-          {children}
-        </LiveKitProvider>
+        <SessionLayout>
+          <LiveKitProvider>
+            {children}
+          </LiveKitProvider>
+        </SessionLayout>
         <Toaster />
       </body>
     </html>
