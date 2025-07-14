@@ -954,7 +954,10 @@ export default function MultimodalChatbot() {
                       {user.nickname?.trim() || user.username?.trim() || user.name?.trim() || user.email}
                     </span>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => signOut()} title="退出登录">
+                  <Button variant="ghost" size="sm" onClick={async () => {
+                    await signOut({ redirect: false });
+                    window.location.href = '/';
+                  }} title="退出登录">
                     <LogOut className="h-4 w-4" />
                   </Button>
                 </div>
