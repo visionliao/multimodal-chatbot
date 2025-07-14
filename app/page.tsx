@@ -43,6 +43,7 @@ import { useLiveKit } from "@/components/livekit/LiveKitProvider"
 import useChatAndTranscription from "@/hooks/useChatAndTranscription";
 import { toastAlert } from "@/components/ui/alert-toast";
 import { signIn, signOut, useSession, SessionProvider } from "next-auth/react"
+import { useIsMobile } from "@/components/ui/use-mobile";
 
 
 interface Message {
@@ -70,6 +71,7 @@ interface AppUser {
 }
 
 export default function MultimodalChatbot() {
+  const isMobile = useIsMobile();
   // 基础状态 - 默认没有聊天记录
   // 聊天主逻辑
   const [chats, setChats] = useState<Chat[]>([])
@@ -79,7 +81,11 @@ export default function MultimodalChatbot() {
   const [isWaitingForReply, setIsWaitingForReply] = useState(false) // 等待AI回复状态
 
   // 侧边栏收起/展开状态
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+  // 根据 isMobile 响应式调整 sidebarCollapsed
+  useEffect(() => {
+    setSidebarCollapsed(isMobile);
+  }, [isMobile]);
 
   // 对话框状态
   const [showRenameDialog, setShowRenameDialog] = useState(false)
