@@ -42,7 +42,9 @@ export const users = pgTable('spark_users', {
 
 // 聊天会话表 spark_chats
 export const chats = pgTable('spark_chats', {
-  chat_id: uuid('chat_id').defaultRandom().primaryKey(),
+  chat_id: varchar('chat_id', { length: 50 }) // 如 'chat_1752572458518'
+    .notNull()
+    .primaryKey(),
   user_id: integer('user_id')
     .notNull()
     .references(() => users.user_id, { onDelete: 'cascade' }),
@@ -53,8 +55,10 @@ export const chats = pgTable('spark_chats', {
 
 // 对话记录表 spark_messages
 export const messages = pgTable('spark_messages', {
-  message_id: uuid('message_id').defaultRandom().primaryKey(),
-  chat_id: uuid('chat_id')
+  message_id: varchar('message_id', { length: 50 }) // 如 'msg_1752572458519'
+    .notNull()
+    .primaryKey(),
+  chat_id: varchar('chat_id', { length: 50 })
     .notNull()
     .references(() => chats.chat_id, { onDelete: 'cascade' }),
   user_id: integer('user_id')
@@ -62,14 +66,14 @@ export const messages = pgTable('spark_messages', {
     .references(() => users.user_id, { onDelete: 'cascade' }),
   content: text('content').notNull(),
   message_source: integer('message_source').notNull(), // 0=用户提问, 1=模型回复
-  timestamp: timestamp('timestamp').defaultNow(),
+  created_at: timestamp('created_at').defaultNow(), // 替代原来的 "timestamp" 字段
   type: integer('type').default(0), // 0=text, 1=image, 2=document
 });
 
 // 文档表 spark_documents
 export const documents = pgTable('spark_documents', {
   document_id: uuid('document_id').defaultRandom().primaryKey(),
-  message_id: uuid('message_id')
+  message_id: varchar('message_id', { length: 50 })
     .notNull()
     .references(() => messages.message_id, { onDelete: 'cascade' }),
   file_path: text('file_path').notNull(),
@@ -80,7 +84,7 @@ export const documents = pgTable('spark_documents', {
 // 图片表 spark_picture
 export const pictures = pgTable('spark_picture', {
   picture_id: uuid('picture_id').defaultRandom().primaryKey(),
-  message_id: uuid('message_id')
+  message_id: varchar('message_id', { length: 50 })
     .notNull()
     .references(() => messages.message_id, { onDelete: 'cascade' }),
   file_path: text('file_path').notNull(),
@@ -118,7 +122,7 @@ async function ensureTablesExist() {
   // spark_chats
   await client`
     CREATE TABLE IF NOT EXISTS spark_chats (
-      chat_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      chat_id VARCHAR(50) PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES spark_users(user_id) ON DELETE CASCADE,
       title VARCHAR(255) NOT NULL,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -129,12 +133,12 @@ async function ensureTablesExist() {
   // spark_messages
   await client`
     CREATE TABLE IF NOT EXISTS spark_messages (
-      message_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      chat_id UUID NOT NULL REFERENCES spark_chats(chat_id) ON DELETE CASCADE,
+      message_id VARCHAR(50) PRIMARY KEY,
+      chat_id VARCHAR(50) NOT NULL REFERENCES spark_chats(chat_id) ON DELETE CASCADE,
       user_id INTEGER NOT NULL REFERENCES spark_users(user_id) ON DELETE CASCADE,
       content TEXT NOT NULL,
       message_source INTEGER NOT NULL,
-      "timestamp" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
       type INTEGER DEFAULT 0
     );
   `;
@@ -143,7 +147,7 @@ async function ensureTablesExist() {
   await client`
     CREATE TABLE IF NOT EXISTS spark_documents (
       document_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      message_id UUID NOT NULL REFERENCES spark_messages(message_id) ON DELETE CASCADE,
+      message_id VARCHAR(50) NOT NULL REFERENCES spark_messages(message_id) ON DELETE CASCADE,
       file_path TEXT NOT NULL,
       description TEXT,
       upload_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -154,7 +158,7 @@ async function ensureTablesExist() {
   await client`
     CREATE TABLE IF NOT EXISTS spark_picture (
       picture_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      message_id UUID NOT NULL REFERENCES spark_messages(message_id) ON DELETE CASCADE,
+      message_id VARCHAR(50) NOT NULL REFERENCES spark_messages(message_id) ON DELETE CASCADE,
       file_path TEXT NOT NULL,
       description TEXT,
       upload_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -186,3 +190,133 @@ export async function updateUserNickname(email: string, nickname: string) {
     .where(eq(users.email, email));
 }
 
+// 创建新的聊天会话
+export async function createChat(chatId: string, userId: number, title: string) {
+  await ensureTablesExist();
+  // 先查询是否已存在这个 chat_id
+  const existingChat = await db.select().from(chats)
+    .where(eq(chats.chat_id, chatId));
+
+  if (existingChat.length > 0) {
+    return { success: true, exists: true, chat_id: chatId };
+  }
+
+  // 如果不存在则创建
+  await db.insert(chats).values({
+    chat_id: chatId,
+    user_id: userId,
+    title,
+  });
+
+  return { success: true, exists: false, chat_id: chatId };
+}
+
+// 获取某个用户的所有聊天会话
+export async function getChatsByUserId(userId: number) {
+  return await db.select().from(chats).where(eq(chats.user_id, userId));
+}
+
+// 更新聊天标题
+export async function updateChatTitle(chatId: string, newTitle: string) {
+  return await db.update(chats)
+    .set({ title: newTitle })
+    .where(eq(chats.chat_id, chatId));
+}
+
+// 删除一个聊天会话（会级联删除消息）
+export async function deleteChat(chatId: string) {
+  return await db.delete(chats).where(eq(chats.chat_id, chatId));
+}
+
+// 添加一条对话记录（如果已存在则更新 content）
+export async function addMessage(
+  messageId: string,
+  chatId: string,
+  userId: number,
+  content: string,
+  messageSource: number,
+  type: number = 0
+) {
+  await ensureTablesExist();
+
+  // 使用 upsert：插入或冲突时更新
+  const result = await db.insert(messages)
+    .values({
+      message_id: messageId,
+      chat_id: chatId,
+      user_id: userId,
+      content,
+      message_source: messageSource,
+      type,
+    })
+    .onConflictDoUpdate({
+      target: messages.message_id, // 冲突字段为 message_id
+      set: {
+        content, // 只更新 content 字段
+      },
+    });
+
+  return { success: true, message_id: messageId };
+}
+
+// 根据 chat_id 获取所有消息
+export async function getMessagesByChatId(chatId: string) {
+  await ensureTablesExist();
+  return await db.select().from(messages).where(eq(messages.chat_id, chatId));
+}
+
+// 删除一条消息
+export async function deleteMessage(messageId: string) {
+  await ensureTablesExist();
+  return await db.delete(messages).where(eq(messages.message_id, messageId));
+}
+
+// 添加文档
+export async function addDocument(
+  documentId: string, // 可选传入 document_id（否则使用默认 UUID）
+  messageId: string,
+  filePath: string,
+  description?: string
+) {
+  await ensureTablesExist();
+
+  await db.insert(documents).values({
+    document_id: documentId,
+    message_id: messageId,
+    file_path: filePath,
+    description,
+  });
+
+  return { success: true, message_id: messageId };
+}
+
+// 获取某条消息的文档
+export async function getDocumentsByMessageId(messageId: string) {
+  return await db.select().from(documents)
+    .where(eq(documents.message_id, messageId));
+}
+
+// 添加图片
+export async function addPicture(
+  pictureId: string, // 可选传入 picture_id（否则使用默认 UUID）
+  messageId: string,
+  filePath: string,
+  description?: string
+) {
+  await ensureTablesExist();
+
+  await db.insert(pictures).values({
+    picture_id: pictureId,
+    message_id: messageId,
+    file_path: filePath,
+    description,
+  });
+
+  return { success: true, message_id: messageId };
+}
+
+// 获取某条消息的图片
+export async function getPicturesByMessageId(messageId: string) {
+  return await db.select().from(pictures)
+    .where(eq(pictures.message_id, messageId));
+}
