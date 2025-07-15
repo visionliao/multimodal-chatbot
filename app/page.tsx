@@ -526,6 +526,7 @@ export default function MultimodalChatbot() {
       if (currentChatId === selectedChatId) {
         if (newChats.length === 0) {
           setCurrentChatId(null)
+          setTempChat(null)
         } else {
           // 找到被删除聊天在原数组中的位置
           const deletedIndex = currentChats.findIndex((chat) => chat.id === selectedChatId)
@@ -845,8 +846,16 @@ export default function MultimodalChatbot() {
     }, 200)
   }
 
-  const backToWelcome = () => {
-    setCurrentChatId(null)
+  const backToWelcome = async () => {
+    if (room && room.state !== 'disconnected') {
+      try {
+        await room.disconnect();
+      } catch (e) {
+        console.error('回到欢迎界面，断开 livekit 失败', e);
+      }
+    }
+    setCurrentChatId(null);
+    setTempChat(null);
   }
 
   const router = useRouter();
