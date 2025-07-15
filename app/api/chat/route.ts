@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authConfig } from '@/app/auth.config';
-import { getUser, createChat, getChatsByUserId, updateChatTitle, deleteChat } from '@/lib/db/db';
+import { getUser, createOrUpdateChat, getChatsByUserId, updateChatTitle, deleteChat } from '@/lib/db/db';
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authConfig);
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   const userId = users[0].user_id;
   const { chatId, title } = await request.json();
   if (!chatId || !title) return NextResponse.json({ error: '参数缺失' }, { status: 400 });
-  const result = await createChat(chatId, userId, title);
+  const result = await createOrUpdateChat(chatId, userId, title);
   return NextResponse.json(result);
 }
 

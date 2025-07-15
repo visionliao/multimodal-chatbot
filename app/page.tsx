@@ -144,7 +144,6 @@ export default function MultimodalChatbot() {
 
   // 监听livekit回复的语音转文本useEffect：
   useEffect(() => {
-    console.log('lhf livekit语音转文本 currentChatId:', currentChatId);
     if (!currentChatId) return;
     const currentChat = chats.find(chat => chat.id === currentChatId);
     if (!currentChat) return;
@@ -155,7 +154,6 @@ export default function MultimodalChatbot() {
       .slice(-1)[0]; // 只取最后一条
 
     if (!botStream || !botStream.message) return;
-    console.log('lhf livekit 最后一条消息:', botStream.message);
     // 判断是否是上一个聊天的缓存消息，因为监听livekitMessages，只要发送消息会马上获得上一次最后的流式数据
     if (
       lastBotMessage.current &&
@@ -170,6 +168,9 @@ export default function MultimodalChatbot() {
       message: botStream.message,
       chatId: currentChatId,
     };
+    // 持久化
+    saveChatToDB(currentChatId, botStream.message);
+    saveMessageToDB(botStream.id, currentChatId, botStream.message, 1, 0);
 
     setChats(prev =>
       prev.map(chat => {
@@ -226,17 +227,15 @@ export default function MultimodalChatbot() {
         msg.message &&
         (msg as any).isTranscription
     );
-    console.log('lhf 当前用户的语音转文字消息:', myTranscriptions);
     if (!myTranscriptions.length) return;
 
     // 逐条处理语音片段，确保触发 AI 回复等逻辑
     myTranscriptions.forEach((msg) => {
       if (insertedTranscriptionIds.current.has(msg.id)) {
-        console.log("lhf 已处理过该语音片段，跳过:", msg.id);
+        // console.log("lhf 已处理过该语音片段，跳过:", msg.id);
         return;
       }
-
-      console.log("lhf 正在处理语音片段:", msg);
+      // console.log("lhf 正在处理语音片段:", msg);
 
       // 标记为已处理
       insertedTranscriptionIds.current.add(msg.id);
@@ -329,63 +328,100 @@ export default function MultimodalChatbot() {
           return chat;
         });
       });
-  });
-
-  // UI 显示更新部分：只显示最后一条语音内容
-  const lastTranscription = myTranscriptions[myTranscriptions.length - 1];
-  const transcriptionId = lastTranscription.id;
-  const fullText = lastTranscription.message;
-
-  console.log(`lhf 语音转文字的唯一ID: ${transcriptionId}`);
-  console.log(`lhf 拼接后的完整文本: "${fullText}"`);
-
-  setChats((prevChats) => {
-    return prevChats.map((chat) => {
-      if (chat.id !== currentChatId) return chat;
-      // 查找是否已有该转录id的气泡
-      const idx = chat.messages.findIndex(
-        (m) => m.id === transcriptionId && m.sender === "user" && m.type === "text"
-      );
-      if (idx !== -1) {
-        // 更新内容
-        const newMessages = [...chat.messages];
-        newMessages[idx] = {
-          ...newMessages[idx],
-          content: fullText,
-          timestamp: new Date(),
-        };
-        return { ...chat, messages: newMessages, lastMessage: fullText, timestamp: new Date() };
-      } else {
-        // 插入新气泡（只在没有时插入）
-        return {
-          ...chat,
-          messages: [
-            ...chat.messages,
-            {
-              id: transcriptionId,
-              content: fullText,
-              sender: "user",
-              timestamp: new Date(),
-              type: "text",
-            },
-          ],
-          lastMessage: fullText,
-          timestamp: new Date(),
-        };
-      }
     });
-  });
 
-  setTimeout(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    inputRef.current?.focus();
-  }, 100);
-}, [livekitMessages, room, tempChat]);
+    // UI 显示更新部分：只显示最后一条语音内容
+    const lastTranscription = myTranscriptions[myTranscriptions.length - 1];
+    const transcriptionId = lastTranscription.id;
+    const fullText = lastTranscription.message;
+    // console.log(`lhf 语音转文字的唯一ID: ${transcriptionId}`);
+    // console.log(`lhf 拼接后的完整文本: "${fullText}"`);
+
+    setChats((prevChats) => {
+      return prevChats.map((chat) => {
+        if (chat.id !== currentChatId) return chat;
+        // 查找是否已有该转录id的气泡
+        const idx = chat.messages.findIndex(
+          (m) => m.id === transcriptionId && m.sender === "user" && m.type === "text"
+        );
+        if (idx !== -1) {
+          // 更新内容
+          const newMessages = [...chat.messages];
+          newMessages[idx] = {
+            ...newMessages[idx],
+            content: fullText,
+            timestamp: new Date(),
+          };
+          return { ...chat, messages: newMessages, lastMessage: fullText, timestamp: new Date() };
+        } else {
+          // 插入新气泡（只在没有时插入）
+          return {
+            ...chat,
+            messages: [
+              ...chat.messages,
+              {
+                id: transcriptionId,
+                content: fullText,
+                sender: "user",
+                timestamp: new Date(),
+                type: "text",
+              },
+            ],
+            lastMessage: fullText,
+            timestamp: new Date(),
+          };
+        }
+      });
+    });
+
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      inputRef.current?.focus();
+    }, 100);
+  }, [livekitMessages, room, tempChat]);
+
+  // 更新聊天记录(没有则创建)
+  const saveChatToDB = async (chatId: string, title: string) => {
+    if (!user) return;
+    try {
+      await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: chatId, title: title }),
+      });
+    } catch (error) {
+      console.error("保存聊天记录失败", error);
+    }
+  };
+  // 更新聊天消息(没有则新建)
+  const saveMessageToDB = async (
+    messageId: string,
+    chatId: string,
+    content: string,
+    messageSource: number,
+    type: number
+  ) => {
+    if (!user) return;
+    try {
+      await fetch('/api/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messageId: messageId,
+          chatId: chatId,
+          content: content,
+          messageSource: messageSource, // messageSource: 0-用户question；1-大模型answer
+          type: type // type： 0-文本；1-图片；2-文档
+        }),
+      });
+    } catch (error) {
+      console.error("保存消息失败", error);
+    };
+  };
 
   // 发送消息
   const sendMessage = async () => {
     console.log('lhf 发送消息 currentChatId:', currentChatId);
-    console.log("lhf sendMessage called", { inputValue, isWaitingForReply, tempChat, chatsLength: chats.length, currentChatId });
     if (!inputValue.trim() || isWaitingForReply) return;
     setIsWaitingForReply(true);
 
@@ -408,7 +444,6 @@ export default function MultimodalChatbot() {
 
     // 发送消息 只在 chats.length === 0 时新建聊天
     if (tempChat) {
-      console.log("lhf sendMessage: merging tempChat");
       const firstMessageTitle = inputValue.trim().slice(0, 30);
       const mergedChat: Chat = {
         ...tempChat,
@@ -419,14 +454,15 @@ export default function MultimodalChatbot() {
       };
       setChats((prev) => {
         const result = [mergedChat, ...prev];
-        console.log("lhf chats after merging tempChat", result);
         return result;
       });
+      console.log("lhf 新建聊天 mergedChat.id：", mergedChat.id);
       setCurrentChatId(mergedChat.id);
       setTempChat(null);
       setIsWaitingForReply(false); // 立即解锁
+      saveChatToDB(mergedChat.id, inputValue);
+      saveMessageToDB(newMessage.id, mergedChat.id, inputValue, 0, 0);
     } else if (chats.length === 0) {
-      console.log("lhf sendMessage: creating new chat");
       const firstMessageTitle = inputValue.trim().slice(0, 30);
       const newChatId = `chat_${Date.now()}`;
       const newChat: Chat = {
@@ -437,11 +473,15 @@ export default function MultimodalChatbot() {
         timestamp: new Date(),
       };
       setChats([newChat]);
+      console.log("lhf 新建聊天 newChatId：", newChatId);
       setCurrentChatId(newChatId);
-      console.log("lhf chats after creating new chat", [newChat]);
       setIsWaitingForReply(false); // 立即解锁
+      saveChatToDB(newChatId, inputValue);
+      saveMessageToDB(newMessage.id, newChatId, inputValue, 0, 0);
     } else if (currentChatId) {
-      console.log("lhf sendMessage: updating existing chat", currentChatId);
+      console.log("lhf 已有聊天 currentChatId：", currentChatId);
+      saveChatToDB(currentChatId, inputValue);
+      saveMessageToDB(newMessage.id, currentChatId, inputValue, 0, 0);
       // 更新现有聊天记录
       setChats((prev) => {
         const result = prev.map((chat) => {
@@ -455,7 +495,6 @@ export default function MultimodalChatbot() {
           }
           return chat;
         });
-        console.log("lhf chats after updating existing chat", result);
         return result;
       });
       setIsWaitingForReply(false); // 立即解锁
@@ -552,7 +591,6 @@ export default function MultimodalChatbot() {
 
   // 语音录制
   const toggleRecording = async () => {
-    console.log('lhf toggleRecording called, isRecording:', isRecording);
     if (isRecording) {
       // 关闭麦克风
       try {
@@ -1204,7 +1242,6 @@ export default function MultimodalChatbot() {
                           isWaitingForReply ? "等待AI回复中..." : isRecording ? "正在语音对话中..." : "输入消息..."
                         }
                         onKeyDown={(e) => {
-                          console.log("lhf onKeyDown", e.key, (e.nativeEvent as any).isComposing, isWaitingForReply, isRecording);
                           if (
                             e.key === "Enter" &&
                             !e.shiftKey &&

@@ -210,14 +210,42 @@ export async function createChat(chatId: string, userId: number, title: string) 
 
   return { success: true, exists: false, chat_id: chatId };
 }
+// 创建或更新聊天会话（如果已存在则更新 updated_at）
+export async function createOrUpdateChat(chatId: string, userId: number, title: string) {
+  await ensureTablesExist();
+
+  // 先查询是否已存在这个 chat_id
+  const existingChat = await db.select().from(chats)
+    .where(eq(chats.chat_id, chatId));
+
+  if (existingChat.length > 0) {
+    // 如果已存在，仅更新 updated_at 字段
+    await db.update(chats)
+      .set({ updated_at: sql`NOW()` })
+      .where(eq(chats.chat_id, chatId));
+
+    return { success: true, exists: true, chat_id: chatId };
+  }
+
+  // 如果不存在则创建
+  await db.insert(chats).values({
+    chat_id: chatId,
+    user_id: userId,
+    title,
+  });
+
+  return { success: true, exists: false, chat_id: chatId };
+}
 
 // 获取某个用户的所有聊天会话
 export async function getChatsByUserId(userId: number) {
+  await ensureTablesExist();
   return await db.select().from(chats).where(eq(chats.user_id, userId));
 }
 
 // 更新聊天标题
 export async function updateChatTitle(chatId: string, newTitle: string) {
+  await ensureTablesExist();
   return await db.update(chats)
     .set({ title: newTitle })
     .where(eq(chats.chat_id, chatId));
@@ -225,6 +253,7 @@ export async function updateChatTitle(chatId: string, newTitle: string) {
 
 // 删除一个聊天会话（会级联删除消息）
 export async function deleteChat(chatId: string) {
+  await ensureTablesExist();
   return await db.delete(chats).where(eq(chats.chat_id, chatId));
 }
 
@@ -292,6 +321,7 @@ export async function addDocument(
 
 // 获取某条消息的文档
 export async function getDocumentsByMessageId(messageId: string) {
+  await ensureTablesExist();
   return await db.select().from(documents)
     .where(eq(documents.message_id, messageId));
 }
@@ -317,6 +347,7 @@ export async function addPicture(
 
 // 获取某条消息的图片
 export async function getPicturesByMessageId(messageId: string) {
+  await ensureTablesExist();
   return await db.select().from(pictures)
     .where(eq(pictures.message_id, messageId));
 }
