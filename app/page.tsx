@@ -37,13 +37,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { AuthDialog } from "@/components/auth-dialog"
 import { WelcomeScreen } from "@/components/welcome-screen"
 import { useLiveKit } from "@/components/livekit/LiveKitProvider"
 import useChatAndTranscription from "@/hooks/useChatAndTranscription";
 import { toastAlert } from "@/components/ui/alert-toast";
 import { signIn, signOut, useSession, SessionProvider } from "next-auth/react"
 import { useIsMobile } from "@/components/ui/use-mobile";
+import { useRouter } from 'next/navigation';
 
 
 interface Message {
@@ -849,6 +849,28 @@ export default function MultimodalChatbot() {
     setCurrentChatId(null)
   }
 
+  const router = useRouter();
+
+  // 修改昵称弹窗相关逻辑
+  const handleNicknameChange = async () => {
+    if (!newNickname.trim()) return;
+    const res = await fetch("/api/user", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nickname: newNickname })
+    });
+    if (res.ok) {
+      // 临时更新本地 UI 昵称
+      if (session?.user) {
+        (session.user as any).nickname = newNickname;
+      }
+      setShowNicknameDialog(false);
+      setNewNickname("");
+    } else {
+      alert("昵称修改失败");
+    }
+  };
+
   return (
     <div className="flex h-screen bg-background">
       {/* 左下角浮动图标按钮，仅在侧边栏关闭时显示 */}
@@ -1284,13 +1306,7 @@ export default function MultimodalChatbot() {
             </div>
             <DialogFooter>
               <Button
-                onClick={() => {
-                  // 这里应调用后端API修改昵称，暂用alert模拟
-                  if (!newNickname.trim()) return;
-                  alert(`新昵称：${newNickname}`);
-                  setShowNicknameDialog(false);
-                  setNewNickname("");
-                }}
+                onClick={handleNicknameChange}
               >
                 确定
               </Button>

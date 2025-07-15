@@ -1,4 +1,5 @@
 // import { NextAuthConfig } from 'next-auth';
+import { getUser } from '@/lib/db/db';
 
 export const authConfig = {
   pages: {
@@ -16,8 +17,12 @@ export const authConfig = {
       return token;
     },
     async session({ session, token }: any) {
-      if (token.nickname) {
-        (session.user as any).nickname = token.nickname;
+      if (session.user?.email) {
+        // 每次都查数据库，确保 nickname 最新
+        const users = await getUser(session.user.email);
+        if (users.length > 0) {
+          (session.user as any).nickname = users[0].nickname;
+        }
       }
       return session;
     },
