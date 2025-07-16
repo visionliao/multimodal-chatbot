@@ -44,7 +44,7 @@ import { toastAlert } from "@/components/ui/alert-toast";
 import { signIn, signOut, useSession, SessionProvider } from "next-auth/react"
 import { useIsMobile } from "@/components/ui/use-mobile";
 import { useRouter } from 'next/navigation';
-import { saveChatToDB, saveMessageToDB } from '@/lib/db/utils';
+import { saveChatToDB, saveMessageToDB, getChatsByUserIdForClient, getMessagesByChatIdForClient } from '@/lib/db/utils';
 
 
 interface Message {
@@ -116,6 +116,25 @@ export default function MultimodalChatbot() {
   const { data: session, status } = useSession();
   // 类型断言扩展 user 字段
   const user = session && session.user ? (session.user as typeof session.user & { nickname?: string; username?: string; user_id?: number }) : undefined;
+
+  // 新增：登录后自动加载聊天记录
+  useEffect(() => {
+    if (user && user.user_id) {
+      console.log("lhf ==================== 触发登录事件")
+      getChatsByUserIdForClient().then((chats) => {
+        // chats: [{ chat_id, user_id, title, created_at, updated_at }]
+        // 转换为前端 Chat 结构
+        const chatList = chats.map((c: any) => ({
+          id: c.chat_id,
+          title: c.title,
+          messages: [], // 后续切换时再加载消息
+          lastMessage: '',
+          timestamp: c.updated_at ? new Date(c.updated_at) : new Date(),
+        }));
+        setChats(chatList);
+      });
+    }
+  }, [user]);
 
   // currentChat 优先 tempChat，否则用 chats+currentChatId
   const currentChat = tempChat ? tempChat : chats.find((chat) => chat.id === currentChatId);

@@ -37,4 +37,36 @@ export const saveMessageToDB = async (
   } catch (error) {
     console.error("保存消息失败", error);
   }
+};
+
+// 获取当前用户所有聊天记录（已登录）
+export const getChatsByUserIdForClient = async () => {
+  try {
+    const res = await fetch('/api/chat', { method: 'GET' });
+    const data = await res.json();
+    if (data.chats) {
+      // 后端已排序，直接返回
+      return data.chats;
+    }
+    return [];
+  } catch (error) {
+    console.error('获取聊天记录失败', error);
+    return [];
+  }
+};
+
+// 根据 chatId 获取所有消息
+export const getMessagesByChatIdForClient = async (chatId: string) => {
+  try {
+    const res = await fetch(`/api/message?chatId=${encodeURIComponent(chatId)}`, { method: 'GET' });
+    const data = await res.json();
+    if (data.messages) {
+      // 后端已排序，直接返回
+      return data.messages;
+    }
+    return [];
+  } catch (error) {
+    console.error('获取消息失败', error);
+    return [];
+  }
 }; 

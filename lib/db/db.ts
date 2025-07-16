@@ -237,10 +237,10 @@ export async function createOrUpdateChat(chatId: string, userId: number, title: 
   return { success: true, exists: false, chat_id: chatId };
 }
 
-// 获取某个用户的所有聊天会话
+// 获取某个用户的所有聊天会话，按 updated_at DESC 排序
 export async function getChatsByUserId(userId: number) {
   await ensureTablesExist();
-  return await db.select().from(chats).where(eq(chats.user_id, userId));
+  return await db.select().from(chats).where(eq(chats.user_id, userId)).orderBy(sql`updated_at DESC`);
 }
 
 // 更新聊天标题
@@ -288,10 +288,10 @@ export async function addMessage(
   return { success: true, message_id: messageId };
 }
 
-// 根据 chat_id 获取所有消息
+// 根据 chat_id 获取所有消息，按 created_at ASC 排序
 export async function getMessagesByChatId(chatId: string) {
   await ensureTablesExist();
-  return await db.select().from(messages).where(eq(messages.chat_id, chatId));
+  return await db.select().from(messages).where(eq(messages.chat_id, chatId)).orderBy(sql`created_at ASC`);
 }
 
 // 删除一条消息
