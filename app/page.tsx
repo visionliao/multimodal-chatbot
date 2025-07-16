@@ -45,6 +45,7 @@ import { signIn, signOut, useSession, SessionProvider } from "next-auth/react"
 import { useIsMobile } from "@/components/ui/use-mobile";
 import { useRouter } from 'next/navigation';
 import { saveChatToDB, saveMessageToDB, getChatsByUserId, getMessagesByChatId, updateChatTitle, deleteChatById } from '@/lib/db/utils';
+import { RoomEvent } from 'livekit-client';
 
 
 interface Message {
@@ -112,6 +113,27 @@ export default function MultimodalChatbot() {
   const insertedTranscriptionIds = useRef<Set<string>>(new Set());
   // 记录最后一条livekit回复消息和当前聊天id
   const lastBotMessage = useRef<{ message: string; chatId: string | null } | null>(null);
+
+  // LiveKit 连接状态：'connecting'|'connected'|'disconnected'
+  const [livekitStatus, setLivekitStatus] = useState<'connecting'|'connected'|'disconnected'>('disconnected');
+
+  useEffect(() => {
+    if (!room) return;
+    console.log("lhf room连接状态改变：", room.state)
+    // 初始状态
+    setLivekitStatus(room.state === 'connected' ? 'connected' : (room.state === 'connecting' ? 'connecting' : 'disconnected'));
+    const handleConnected = () => setLivekitStatus('connected');
+    const handleDisconnected = () => setLivekitStatus('disconnected');
+    const handleReconnecting = () => setLivekitStatus('connecting');
+    room.on(RoomEvent.Connected, handleConnected);
+    room.on(RoomEvent.Disconnected, handleDisconnected);
+    room.on(RoomEvent.Reconnecting, handleReconnecting);
+    return () => {
+      room.off(RoomEvent.Connected, handleConnected);
+      room.off(RoomEvent.Disconnected, handleDisconnected);
+      room.off(RoomEvent.Reconnecting, handleReconnecting);
+    };
+  }, [room]);
 
   const { data: session, status } = useSession();
   // 类型断言扩展 user 字段
@@ -1131,10 +1153,16 @@ export default function MultimodalChatbot() {
                   <div>
                     <h1 className="font-semibold">AI助手</h1>
                     <p className="text-sm text-muted-foreground">
-                      在线 • 支持文本、语音、文档
+                      {livekitStatus === 'connected' && (
+                        <>
+                          <span className="text-blue-600 font-semibold">在线</span> • 支持文本、语音、文档
+                        </>
+                      )}
+                      {livekitStatus === 'disconnected' && '离线'}
+                      {livekitStatus === 'connecting' && '正在连接'}
                       {user && (
                         <span className="ml-2">
-                          • 已登录为 {user.nickname?.trim() || user.username?.trim() || user.name?.trim() || user.email}
+                          • 已登录为 <span className="font-semibold">{user.nickname?.trim() || user.username?.trim() || user.name?.trim() || user.email}</span>
                         </span>
                       )}
                     </p>
