@@ -13,15 +13,17 @@ export const authConfig = {
     async jwt({ token, user }: any) {
       if (user) {
         token.nickname = (user as any).nickname;
+        token.user_id = (user as any).user_id;
       }
       return token;
     },
     async session({ session, token }: any) {
       if (session.user?.email) {
-        // 每次都查数据库，确保 nickname 最新
+        // 每次都查数据库，确保 nickname 和 user_id 最新
         const users = await getUser(session.user.email);
         if (users.length > 0) {
           (session.user as any).nickname = users[0].nickname;
+          (session.user as any).user_id = Number(users[0].user_id);
         }
       }
       return session;

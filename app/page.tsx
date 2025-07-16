@@ -115,7 +115,7 @@ export default function MultimodalChatbot() {
 
   const { data: session, status } = useSession();
   // 类型断言扩展 user 字段
-  const user = session && session.user ? (session.user as typeof session.user & { nickname?: string; username?: string }) : undefined;
+  const user = session && session.user ? (session.user as typeof session.user & { nickname?: string; username?: string; user_id?: number }) : undefined;
 
   // currentChat 优先 tempChat，否则用 chats+currentChatId
   const currentChat = tempChat ? tempChat : chats.find((chat) => chat.id === currentChatId);
