@@ -117,14 +117,23 @@ export default function MultimodalChatbot() {
   // LiveKit 连接状态：'connecting'|'connected'|'disconnected'
   const [livekitStatus, setLivekitStatus] = useState<'connecting'|'connected'|'disconnected'>('disconnected');
 
+  // 监听room 连接状态
   useEffect(() => {
     if (!room) return;
-    console.log("lhf room连接状态改变：", room.state)
     // 初始状态
     setLivekitStatus(room.state === 'connected' ? 'connected' : (room.state === 'connecting' ? 'connecting' : 'disconnected'));
-    const handleConnected = () => setLivekitStatus('connected');
-    const handleDisconnected = () => setLivekitStatus('disconnected');
-    const handleReconnecting = () => setLivekitStatus('connecting');
+    const handleConnected = () => {
+      console.log("lhf room 连接状态成功")
+      setLivekitStatus('connected');
+    };
+    const handleDisconnected = () => {
+      console.log("lhf room 断开连接")
+      setLivekitStatus('disconnected');
+    };
+    const handleReconnecting = () => {
+      console.log("lhf room 重新连接中")
+      setLivekitStatus('connecting');
+    };
     room.on(RoomEvent.Connected, handleConnected);
     room.on(RoomEvent.Disconnected, handleDisconnected);
     room.on(RoomEvent.Reconnecting, handleReconnecting);
