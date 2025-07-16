@@ -65,13 +65,6 @@ interface Chat {
   timestamp: Date
 }
 
-interface AppUser {
-  id: string
-  username: string
-  phone?: string
-  email?: string
-}
-
 export default function MultimodalChatbot() {
   const isMobile = useIsMobile();
   // 基础状态 - 默认没有聊天记录
@@ -234,8 +227,10 @@ export default function MultimodalChatbot() {
       chatId: currentChatId,
     };
     // 持久化
-    saveChatToDB(user, currentChatId, botStream.message);
-    saveMessageToDB(user, botStream.id, currentChatId, botStream.message, 1, 0);
+    (async () => {
+      await saveChatToDB(user, currentChatId, botStream.message);
+      await saveMessageToDB(user, botStream.id, currentChatId, botStream.message, 1, 0);
+    })();
 
     setChats(prev =>
       prev.map(chat => {
@@ -403,8 +398,10 @@ export default function MultimodalChatbot() {
     // console.log(`lhf 语音转文字的唯一ID: ${transcriptionId}`);
     // console.log(`lhf 拼接后的完整文本: "${fullText}"`);
     if(currentChatId) {
-      saveChatToDB(user, currentChatId, fullText);
-      saveMessageToDB(user, transcriptionId, currentChatId, fullText, 0, 0);
+      (async () => {
+        await saveChatToDB(user, currentChatId, fullText);
+        await saveMessageToDB(user, transcriptionId, currentChatId, fullText, 0, 0);
+      })();
     }
 
     setChats((prevChats) => {
@@ -458,7 +455,6 @@ export default function MultimodalChatbot() {
       if (livekitStatus === 'disconnected' && connectRoom) connectRoom();
       return;
     }
-    console.log('lhf 发送消息 currentChatId:', currentChatId);
     if (!inputValue.trim() || isWaitingForReply) return;
     setIsWaitingForReply(true);
 
@@ -493,13 +489,12 @@ export default function MultimodalChatbot() {
         const result = [mergedChat, ...prev];
         return result;
       });
-      console.log("lhf 新建聊天 mergedChat.id：", mergedChat.id);
       setCurrentChatId(mergedChat.id);
       setTempChat(null);
       setIsWaitingForReply(false); // 立即解锁
-      saveChatToDB(user, mergedChat.id, inputValue);
+      await saveChatToDB(user, mergedChat.id, inputValue);
       newMessage.id = `msg_${Date.now()}`;
-      saveMessageToDB(user, newMessage.id, mergedChat.id, inputValue, 0, 0);
+      await saveMessageToDB(user, newMessage.id, mergedChat.id, inputValue, 0, 0);
     } else if (chats.length === 0) {
       const firstMessageTitle = inputValue.trim().slice(0, 30);
       const newChatId = `chat_${Date.now()}`;
@@ -511,16 +506,14 @@ export default function MultimodalChatbot() {
         timestamp: new Date(),
       };
       setChats([newChat]);
-      console.log("lhf 新建聊天 newChatId：", newChatId);
       setCurrentChatId(newChatId);
       setIsWaitingForReply(false); // 立即解锁
-      saveChatToDB(user, newChatId, inputValue);
+      await saveChatToDB(user, newChatId, inputValue);
       newMessage.id = `msg_${Date.now()}`;
-      saveMessageToDB(user, newMessage.id, newChatId, inputValue, 0, 0);
+      await saveMessageToDB(user, newMessage.id, newChatId, inputValue, 0, 0);
     } else if (currentChatId) {
-      console.log("lhf 已有聊天 currentChatId：", currentChatId);
-      saveChatToDB(user, currentChatId, inputValue);
-      saveMessageToDB(user, newMessage.id, currentChatId, inputValue, 0, 0);
+      await saveChatToDB(user, currentChatId, inputValue);
+      await saveMessageToDB(user, newMessage.id, currentChatId, inputValue, 0, 0);
       // 更新现有聊天记录
       setChats((prev) => {
         const result = prev.map((chat) => {
@@ -631,7 +624,7 @@ export default function MultimodalChatbot() {
 
   // 语音录制
   const toggleRecording = async () => {
-    if (livekitStatus !== 'connected') {
+    if (livekitStatus !== 'connected' && !isRecording) {
       toastAlert({ title: '正在连接服务器，请稍候...', description: '' });
       if (livekitStatus === 'disconnected' && connectRoom) connectRoom();
       return;
@@ -817,89 +810,13 @@ export default function MultimodalChatbot() {
 
   // 发送预设消息
   const sendPresetMessage = (question: string) => {
-    if (livekitStatus !== 'connected') {
-      toastAlert({ title: '正在连接服务器，请稍候...', description: '' });
-      if (livekitStatus === 'disconnected' && connectRoom) connectRoom();
-      return;
-    }
-    setIsWaitingForReply(true)
-    const firstMessageTitle = question.trim().slice(0, 30);
-    const newMessage: Message = {
-      id: `msg_${Date.now()}`,
-      content: question,
-      sender: "user",
-      timestamp: new Date(),
-      type: "text",
-    }
-    if (tempChat) {
-      const mergedChat: Chat = {
-        ...tempChat,
-        title: firstMessageTitle || "新对话",
-        messages: [...tempChat.messages, newMessage],
-        lastMessage: question,
-        timestamp: new Date(),
-      };
-      setChats((prev) => [mergedChat, ...prev]);
-      setCurrentChatId(mergedChat.id);
-      setTempChat(null);
-    } else if (chats.length === 0) {
-      const newChatId = `chat_${Date.now()}`;
-      const newChat: Chat = {
-        id: newChatId,
-        title: firstMessageTitle || "新对话",
-        messages: [newMessage],
-        lastMessage: question,
-        timestamp: new Date(),
-      };
-      setChats([newChat]);
-      setCurrentChatId(newChatId);
-    } else if (currentChatId) {
-      setChats((prev) =>
-        prev.map((chat) => {
-          if (chat.id === currentChatId) {
-            return {
-              ...chat,
-              messages: [...chat.messages, newMessage],
-              lastMessage: question,
-              timestamp: new Date(),
-            };
-          }
-          return chat;
-        }),
-      );
-    }
-    setInputValue("");
-    setTimeout(() => {
-      const botReply: Message = {
-        id: `msg_${Date.now() + 1}`,
-        content: "这是一个预设答案，用于测试。", // 实际预设答案需要从后端获取
-        sender: "bot",
-        timestamp: new Date(),
-        type: "text",
-      }
-      setChats((prev) =>
-        prev.map((chat) => {
-          if (chat.id === currentChatId) {
-            return {
-              ...chat,
-              messages: [...chat.messages, botReply],
-            }
-          }
-          return chat
-        }),
-      )
-      setIsWaitingForReply(false)
-      setTimeout(() => {
-        inputRef.current?.focus()
-      }, 100)
-    }, 1000)
+    console.log("lhf 发送预设消息：", question);
   }
 
   // 新建对话时，创建 tempChat（AI欢迎语），currentChatId=null
   const createNewChat = (presetQuestion?: string) => {
     connectRoom();
     const newChatId = `chat_${Date.now()}`;
-    console.log('lhf 新建聊天窗口 newChatId:', newChatId);
     const welcomeMsg: Message = {
       id: `msg_${Date.now()}`,
       content: "您好！我是您的Spark AI助手，有任何关于Spark公寓的问题都可以咨询我。",
@@ -925,27 +842,34 @@ export default function MultimodalChatbot() {
     }, 100);
   };
 
+  // 切换聊天窗口
   const selectChat = (chatId: string) => {
-    console.log('lhf 切换聊天窗口 chatId:', chatId);
     setTempChat(null);
     setCurrentChatId(chatId)
     setTimeout(() => {
       scrollToBottom()
       inputRef.current?.focus()
     }, 200)
+    if (isRecording) {
+      toggleRecording();
+    }
     if (room && room.state === 'disconnected') {
       console.log("lhf 切换聊天尝试连接room")
       connectRoom();
     }
   }
 
+  // 返回欢迎界面
   const backToWelcome = async () => {
-    if (room && room.state !== 'disconnected') {
+    /*if (room && room.state !== 'disconnected') {
       try {
         await room.disconnect();
       } catch (e) {
         console.error('回到欢迎界面，断开 livekit 失败', e);
       }
+    }*/
+    if (isRecording) {
+      toggleRecording();
     }
     setCurrentChatId(null);
     setTempChat(null);
