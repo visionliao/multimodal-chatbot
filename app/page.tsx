@@ -885,6 +885,10 @@ export default function MultimodalChatbot() {
       scrollToBottom()
       inputRef.current?.focus()
     }, 200)
+    if (room && room.state === 'disconnected') {
+      console.log("lhf 切换聊天尝试连接room")
+      connectRoom();
+    }
   }
 
   const backToWelcome = async () => {
