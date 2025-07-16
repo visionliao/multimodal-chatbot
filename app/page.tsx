@@ -902,6 +902,7 @@ export default function MultimodalChatbot() {
 
   const selectChat = (chatId: string) => {
     console.log('lhf 切换聊天窗口 chatId:', chatId);
+    setTempChat(null);
     setCurrentChatId(chatId)
     setTimeout(() => {
       scrollToBottom()
