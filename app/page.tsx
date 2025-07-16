@@ -44,6 +44,7 @@ import { toastAlert } from "@/components/ui/alert-toast";
 import { signIn, signOut, useSession, SessionProvider } from "next-auth/react"
 import { useIsMobile } from "@/components/ui/use-mobile";
 import { useRouter } from 'next/navigation';
+import { saveChatToDB, saveMessageToDB } from '@/lib/db/utils';
 
 
 interface Message {
@@ -169,8 +170,8 @@ export default function MultimodalChatbot() {
       chatId: currentChatId,
     };
     // 持久化
-    saveChatToDB(currentChatId, botStream.message);
-    saveMessageToDB(botStream.id, currentChatId, botStream.message, 1, 0);
+    saveChatToDB(user, currentChatId, botStream.message);
+    saveMessageToDB(user, botStream.id, currentChatId, botStream.message, 1, 0);
 
     setChats(prev =>
       prev.map(chat => {
@@ -338,8 +339,8 @@ export default function MultimodalChatbot() {
     // console.log(`lhf 语音转文字的唯一ID: ${transcriptionId}`);
     // console.log(`lhf 拼接后的完整文本: "${fullText}"`);
     if(currentChatId) {
-      saveChatToDB(currentChatId, fullText);
-      saveMessageToDB(transcriptionId, currentChatId, fullText, 0, 0);
+      saveChatToDB(user, currentChatId, fullText);
+      saveMessageToDB(user, transcriptionId, currentChatId, fullText, 0, 0);
     }
 
     setChats((prevChats) => {
@@ -385,45 +386,6 @@ export default function MultimodalChatbot() {
     }, 100);
   }, [livekitMessages, room, tempChat]);
 
-  // 更新聊天记录(没有则创建)
-  const saveChatToDB = async (chatId: string, title: string) => {
-    if (!user) return;
-    try {
-      await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: chatId, title: title }),
-      });
-    } catch (error) {
-      console.error("保存聊天记录失败", error);
-    }
-  };
-  // 更新聊天消息(没有则新建)
-  const saveMessageToDB = async (
-    messageId: string,
-    chatId: string,
-    content: string,
-    messageSource: number,
-    type: number
-  ) => {
-    if (!user) return;
-    try {
-      await fetch('/api/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messageId: messageId,
-          chatId: chatId,
-          content: content,
-          messageSource: messageSource, // messageSource: 0-用户question；1-大模型answer
-          type: type // type： 0-文本；1-图片；2-文档
-        }),
-      });
-    } catch (error) {
-      console.error("保存消息失败", error);
-    };
-  };
-
   // 发送消息
   const sendMessage = async () => {
     console.log('lhf 发送消息 currentChatId:', currentChatId);
@@ -465,9 +427,9 @@ export default function MultimodalChatbot() {
       setCurrentChatId(mergedChat.id);
       setTempChat(null);
       setIsWaitingForReply(false); // 立即解锁
-      saveChatToDB(mergedChat.id, inputValue);
+      saveChatToDB(user, mergedChat.id, inputValue);
       newMessage.id = `msg_${Date.now()}`;
-      saveMessageToDB(newMessage.id, mergedChat.id, inputValue, 0, 0);
+      saveMessageToDB(user, newMessage.id, mergedChat.id, inputValue, 0, 0);
     } else if (chats.length === 0) {
       const firstMessageTitle = inputValue.trim().slice(0, 30);
       const newChatId = `chat_${Date.now()}`;
@@ -482,13 +444,13 @@ export default function MultimodalChatbot() {
       console.log("lhf 新建聊天 newChatId：", newChatId);
       setCurrentChatId(newChatId);
       setIsWaitingForReply(false); // 立即解锁
-      saveChatToDB(newChatId, inputValue);
+      saveChatToDB(user, newChatId, inputValue);
       newMessage.id = `msg_${Date.now()}`;
-      saveMessageToDB(newMessage.id, newChatId, inputValue, 0, 0);
+      saveMessageToDB(user, newMessage.id, newChatId, inputValue, 0, 0);
     } else if (currentChatId) {
       console.log("lhf 已有聊天 currentChatId：", currentChatId);
-      saveChatToDB(currentChatId, inputValue);
-      saveMessageToDB(newMessage.id, currentChatId, inputValue, 0, 0);
+      saveChatToDB(user, currentChatId, inputValue);
+      saveMessageToDB(user, newMessage.id, currentChatId, inputValue, 0, 0);
       // 更新现有聊天记录
       setChats((prev) => {
         const result = prev.map((chat) => {
