@@ -120,17 +120,31 @@ export default function MultimodalChatbot() {
   // 新增：登录后自动加载聊天记录
   useEffect(() => {
     if (user && user.user_id) {
-      console.log("lhf ==================== 触发登录事件")
-      getChatsByUserIdForClient().then((chats) => {
+      //console.log("lhf 触发登录事件")
+      getChatsByUserIdForClient().then(async (chats) => {
         // chats: [{ chat_id, user_id, title, created_at, updated_at }]
-        // 转换为前端 Chat 结构
-        const chatList = chats.map((c: any) => ({
-          id: c.chat_id,
-          title: c.title,
-          messages: [], // 后续切换时再加载消息
-          lastMessage: '',
-          timestamp: c.updated_at ? new Date(c.updated_at) : new Date(),
-        }));
+        // 批量获取每个聊天的消息
+        const chatList = await Promise.all(
+          chats.map(async (c: any) => {
+            const messagesRaw = await getMessagesByChatIdForClient(c.chat_id);
+            // 转换为前端 Message 结构
+            const messages = messagesRaw.map((m: any) => ({
+              id: m.message_id,
+              content: m.content,
+              sender: m.message_source === 0 ? "user" : "bot",
+              type: m.type === 0 ? "text" : m.type === 1 ? "file" : "text", // 这里只区分文本/文件，后续可扩展
+              fileName: m.type === 1 ? m.file_name : undefined,
+              timestamp: m.created_at ? new Date(m.created_at) : new Date(),
+            }));
+            return {
+              id: c.chat_id,
+              title: c.title,
+              messages,
+              lastMessage: messages.length > 0 ? messages[messages.length - 1].content : '',
+              timestamp: c.updated_at ? new Date(c.updated_at) : new Date(),
+            };
+          })
+        );
         setChats(chatList);
       });
     }
