@@ -334,8 +334,13 @@ export default function MultimodalChatbot() {
     const lastTranscription = myTranscriptions[myTranscriptions.length - 1];
     const transcriptionId = lastTranscription.id;
     const fullText = lastTranscription.message;
+    // console.log(`lhf 当前聊天id: ${currentChatId}`);
     // console.log(`lhf 语音转文字的唯一ID: ${transcriptionId}`);
     // console.log(`lhf 拼接后的完整文本: "${fullText}"`);
+    if(currentChatId) {
+      saveChatToDB(currentChatId, fullText);
+      saveMessageToDB(transcriptionId, currentChatId, fullText, 0, 0);
+    }
 
     setChats((prevChats) => {
       return prevChats.map((chat) => {
@@ -461,6 +466,7 @@ export default function MultimodalChatbot() {
       setTempChat(null);
       setIsWaitingForReply(false); // 立即解锁
       saveChatToDB(mergedChat.id, inputValue);
+      newMessage.id = `msg_${Date.now()}`;
       saveMessageToDB(newMessage.id, mergedChat.id, inputValue, 0, 0);
     } else if (chats.length === 0) {
       const firstMessageTitle = inputValue.trim().slice(0, 30);
@@ -477,6 +483,7 @@ export default function MultimodalChatbot() {
       setCurrentChatId(newChatId);
       setIsWaitingForReply(false); // 立即解锁
       saveChatToDB(newChatId, inputValue);
+      newMessage.id = `msg_${Date.now()}`;
       saveMessageToDB(newMessage.id, newChatId, inputValue, 0, 0);
     } else if (currentChatId) {
       console.log("lhf 已有聊天 currentChatId：", currentChatId);
