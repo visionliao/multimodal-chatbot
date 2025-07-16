@@ -443,6 +443,12 @@ export default function MultimodalChatbot() {
 
   // 发送消息
   const sendMessage = async () => {
+    if (livekitStatus !== 'connected') {
+      toastAlert({ title: '正在连接服务器，请稍候...', description: '' });
+      //在 React 组件中，connectRoom 可能是通过 props 或 useContext/useCallback 等方式传递进来的“连接房间”的方法。这个判断的作用是：只有在有可用的 connectRoom 方法时，才会去调用它，防止出现“未定义函数”的报错。
+      if (livekitStatus === 'disconnected' && connectRoom) connectRoom();
+      return;
+    }
     console.log('lhf 发送消息 currentChatId:', currentChatId);
     if (!inputValue.trim() || isWaitingForReply) return;
     setIsWaitingForReply(true);
@@ -616,6 +622,11 @@ export default function MultimodalChatbot() {
 
   // 语音录制
   const toggleRecording = async () => {
+    if (livekitStatus !== 'connected') {
+      toastAlert({ title: '正在连接服务器，请稍候...', description: '' });
+      if (livekitStatus === 'disconnected' && connectRoom) connectRoom();
+      return;
+    }
     if (isRecording) {
       // 关闭麦克风
       try {
@@ -797,6 +808,11 @@ export default function MultimodalChatbot() {
 
   // 发送预设消息
   const sendPresetMessage = (question: string) => {
+    if (livekitStatus !== 'connected') {
+      toastAlert({ title: '正在连接服务器，请稍候...', description: '' });
+      if (livekitStatus === 'disconnected' && connectRoom) connectRoom();
+      return;
+    }
     setIsWaitingForReply(true)
     const firstMessageTitle = question.trim().slice(0, 30);
     const newMessage: Message = {
