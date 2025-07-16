@@ -44,7 +44,7 @@ import { toastAlert } from "@/components/ui/alert-toast";
 import { signIn, signOut, useSession, SessionProvider } from "next-auth/react"
 import { useIsMobile } from "@/components/ui/use-mobile";
 import { useRouter } from 'next/navigation';
-import { saveChatToDB, saveMessageToDB, getChatsByUserIdForClient, getMessagesByChatIdForClient } from '@/lib/db/utils';
+import { saveChatToDB, saveMessageToDB, getChatsByUserId, getMessagesByChatId, updateChatTitle } from '@/lib/db/utils';
 
 
 interface Message {
@@ -117,16 +117,16 @@ export default function MultimodalChatbot() {
   // 类型断言扩展 user 字段
   const user = session && session.user ? (session.user as typeof session.user & { nickname?: string; username?: string; user_id?: number }) : undefined;
 
-  // 新增：登录后自动加载聊天记录
+  // 登录后自动加载聊天记录
   useEffect(() => {
     if (user && user.user_id) {
       //console.log("lhf 触发登录事件")
-      getChatsByUserIdForClient().then(async (chats) => {
+      getChatsByUserId(user).then(async (chats) => {
         // chats: [{ chat_id, user_id, title, created_at, updated_at }]
         // 批量获取每个聊天的消息
         const chatList = await Promise.all(
           chats.map(async (c: any) => {
-            const messagesRaw = await getMessagesByChatIdForClient(c.chat_id);
+            const messagesRaw = await getMessagesByChatId(user, c.chat_id);
             // 转换为前端 Message 结构
             const messages = messagesRaw.map((m: any) => ({
               id: m.message_id,
@@ -544,14 +544,18 @@ export default function MultimodalChatbot() {
   }
 
   // 重命名聊天
-  const renameChat = () => {
-    if (!newTitle.trim() || !selectedChatId) return
-
-    setChats((prev) => prev.map((chat) => (chat.id === selectedChatId ? { ...chat, title: newTitle.trim() } : chat)))
-
-    setShowRenameDialog(false)
-    setNewTitle("")
-    setSelectedChatId("")
+  const renameChat = async () => {
+    if (!newTitle.trim() || !selectedChatId) return;
+    // 先请求后端
+    const res = await updateChatTitle(user, selectedChatId, newTitle.trim());
+    if (res && res.success) {
+      setChats((prev) => prev.map((chat) => (chat.id === selectedChatId ? { ...chat, title: newTitle.trim() } : chat)));
+      setShowRenameDialog(false);
+      setNewTitle("");
+      setSelectedChatId("");
+    } else {
+      alert("重命名失败");
+    }
   }
 
   // 删除聊天

@@ -40,7 +40,8 @@ export const saveMessageToDB = async (
 };
 
 // 获取当前用户所有聊天记录（已登录）
-export const getChatsByUserIdForClient = async () => {
+export const getChatsByUserId = async (user: any) => {
+  if (!user) return;
   try {
     const res = await fetch('/api/chat', { method: 'GET' });
     const data = await res.json();
@@ -56,7 +57,8 @@ export const getChatsByUserIdForClient = async () => {
 };
 
 // 根据 chatId 获取所有消息
-export const getMessagesByChatIdForClient = async (chatId: string) => {
+export const getMessagesByChatId = async (user: any, chatId: string) => {
+  if (!user) return;
   try {
     const res = await fetch(`/api/message?chatId=${encodeURIComponent(chatId)}`, { method: 'GET' });
     const data = await res.json();
@@ -68,5 +70,22 @@ export const getMessagesByChatIdForClient = async (chatId: string) => {
   } catch (error) {
     console.error('获取消息失败', error);
     return [];
+  }
+};
+
+// 更新聊天标题
+export const updateChatTitle = async (user: any, chatId: string, newTitle: string) => {
+  if (!user) return;
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId: chatId, newTitle: newTitle }),
+    });
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    console.error('更新聊天标题失败', error);
+    return { success: false, error };
   }
 }; 
