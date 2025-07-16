@@ -44,7 +44,7 @@ import { toastAlert } from "@/components/ui/alert-toast";
 import { signIn, signOut, useSession, SessionProvider } from "next-auth/react"
 import { useIsMobile } from "@/components/ui/use-mobile";
 import { useRouter } from 'next/navigation';
-import { saveChatToDB, saveMessageToDB, getChatsByUserId, getMessagesByChatId, updateChatTitle } from '@/lib/db/utils';
+import { saveChatToDB, saveMessageToDB, getChatsByUserId, getMessagesByChatId, updateChatTitle, deleteChatById } from '@/lib/db/utils';
 
 
 interface Message {
@@ -559,40 +559,37 @@ export default function MultimodalChatbot() {
   }
 
   // 删除聊天
-  const deleteChat = () => {
-    if (!selectedChatId) return
-
-    // 使用函数式更新，确保获取最新状态
-    setChats((currentChats) => {
-      // 过滤掉要删除的聊天
-      const newChats = currentChats.filter((chat) => chat.id !== selectedChatId)
-
-      // 如果删除的是当前选中的聊天，需要重新选择
-      if (currentChatId === selectedChatId) {
-        if (newChats.length === 0) {
-          setCurrentChatId(null)
-          setTempChat(null)
-        } else {
-          // 找到被删除聊天在原数组中的位置
-          const deletedIndex = currentChats.findIndex((chat) => chat.id === selectedChatId)
-
-          // 选择相邻的聊天
-          let nextIndex = deletedIndex
-          if (nextIndex >= newChats.length) {
-            nextIndex = newChats.length - 1
+  const deleteChat = async () => {
+    if (!selectedChatId) return;
+    const res = await deleteChatById(user, selectedChatId);
+    if (res && res.success) {
+      setChats((currentChats) => {
+        // 过滤掉要删除的聊天
+        const newChats = currentChats.filter((chat) => chat.id !== selectedChatId);
+        // 如果删除的是当前选中的聊天，需要重新选择
+        if (currentChatId === selectedChatId) {
+          if (newChats.length === 0) {
+            setCurrentChatId(null);
+            setTempChat(null);
+          } else {
+            // 找到被删除聊天在原数组中的位置
+            const deletedIndex = currentChats.findIndex((chat) => chat.id === selectedChatId);
+            // 选择相邻的聊天
+            let nextIndex = deletedIndex;
+            if (nextIndex >= newChats.length) {
+              nextIndex = newChats.length - 1;
+            }
+            const nextChatId = newChats[nextIndex]?.id;
+            setCurrentChatId(nextChatId || null);
           }
-
-          const nextChatId = newChats[nextIndex]?.id
-          setCurrentChatId(nextChatId || null)
         }
-      }
-
-      return newChats
-    })
-
-    // 关闭对话框并重置状态
-    setShowDeleteDialog(false)
-    setSelectedChatId("")
+        return newChats;
+      });
+      setShowDeleteDialog(false);
+      setSelectedChatId("");
+    } else {
+      alert("删除失败");
+    }
   }
 
   // 语音录制

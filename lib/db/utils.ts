@@ -88,4 +88,21 @@ export const updateChatTitle = async (user: any, chatId: string, newTitle: strin
     console.error('更新聊天标题失败', error);
     return { success: false, error };
   }
+};
+
+// 删除聊天记录
+export const deleteChatById = async (user: any, chatId: string) => {
+  if (!user) return;
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId: chatId }),
+    });
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    console.error('删除聊天记录失败', error);
+    return { success: false, error };
+  }
 }; 
