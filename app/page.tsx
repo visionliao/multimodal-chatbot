@@ -812,6 +812,11 @@ export default function MultimodalChatbot() {
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || isWaitingForReply) return;
+    if (file.size > 10 * 1024 * 1024) { // 10MB 限制
+      toastAlert({ title: '文件大小超出限制', description: '请选择不超过 10MB 的文件' });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     setSelectedFile(file);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
