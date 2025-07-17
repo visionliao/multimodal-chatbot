@@ -23,6 +23,7 @@ import {
   Image,
   FileIcon,
   X,
+  FileQuestion,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -817,12 +818,22 @@ export default function MultimodalChatbot() {
 
   // 渲染文件图标
   const renderFileIcon = (file: File) => {
+    const mime = file.type;
     const ext = file.name.split('.').pop()?.toLowerCase();
-    if (file.type.startsWith("image/")) return <Image className="w-5 h-5" />;
-    if (ext === "pdf") return <FileIcon className="w-5 h-5" />;
-    if (["doc", "docx"].includes(ext || "")) return <FileIcon className="w-5 h-5" />;
-    if (["txt", "md"].includes(ext || "")) return <FileText className="w-5 h-5" />;
-    return <FileText className="w-5 h-5" />;
+
+    if (mime.startsWith("image/")) return <Image className="w-5 h-5" />;
+    if (mime === "application/pdf") return <FileIcon className="w-5 h-5" />;
+    if (mime === "text/plain") return <FileText className="w-5 h-5" />;
+    if (mime === "application/msword" || mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return <FileIcon className="w-5 h-5" />;
+    // 兜底：如果 MIME type 为空，再用后缀
+    if (!mime) {
+      if (["jpg", "jpeg", "png", "gif", "bmp", "webp"].includes(ext || "")) return <Image className="w-5 h-5" />;
+      if (["pdf"].includes(ext || "")) return <FileIcon className="w-5 h-5" />;
+      if (["doc", "docx"].includes(ext || "")) return <FileIcon className="w-5 h-5" />;
+      if (["txt", "md"].includes(ext || "")) return <FileText className="w-5 h-5" />;
+    }
+    // 其它未知类型
+    return <FileQuestion className="w-5 h-5" />;
   };
   return (
     <div className="flex h-screen bg-background">
