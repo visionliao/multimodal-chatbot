@@ -19,6 +19,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  FileText,
+  Image,
+  FileIcon,
+  X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -672,102 +676,6 @@ export default function MultimodalChatbot() {
     }
   };
 
-  // 文件上传
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file || isWaitingForReply) return // 等待回复时不能上传文件
-
-    setIsWaitingForReply(true) // 设置等待回复状态
-
-    const fileMessage: Message = {
-      id: `msg_${Date.now()}`,
-      content: `已上传文件: ${file.name}`,
-      sender: "user",
-      timestamp: new Date(),
-      type: "file",
-      fileName: file.name,
-    }
-
-    // 如果是临时聊天状态，需要先创建真正的聊天记录
-    if (tempChat) { // 如果当前是临时聊天，则新建一个
-      const firstMessageTitle = `文件: ${file.name.slice(0, 20)}`;
-      const newChatId = `chat_${Date.now()}`;
-      const mergedChat: Chat = {
-        ...tempChat,
-        id: newChatId,
-        title: firstMessageTitle,
-        messages: [...tempChat.messages, fileMessage],
-        lastMessage: `文件: ${file.name}`,
-        timestamp: new Date(),
-      };
-      setChats((prev) => [mergedChat, ...prev]);
-      setCurrentChatId(newChatId);
-      setTempChat(null);
-    } else if (chats.length === 0) { // 如果当前没有聊天，则新建一个
-      const firstMessageTitle = `文件: ${file.name.slice(0, 20)}`;
-      const newChatId = `chat_${Date.now()}`;
-      const newChat: Chat = {
-        id: newChatId,
-        title: firstMessageTitle,
-        messages: [fileMessage],
-        lastMessage: `文件: ${file.name}`,
-        timestamp: new Date(),
-      };
-      setChats([newChat]);
-      setCurrentChatId(newChatId);
-    } else if (currentChatId) {
-      // 更新现有聊天记录
-      setChats((prev) =>
-        prev.map((chat) => {
-          if (chat.id === currentChatId) {
-            return {
-              ...chat,
-              messages: [...chat.messages, fileMessage],
-              lastMessage: `文件: ${file.name}`,
-              timestamp: new Date(),
-            }
-          }
-          return chat
-        }),
-      )
-    }
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
-    }
-
-    // 模拟AI对文件的回复
-    setTimeout(() => {
-      const botReply: Message = {
-        id: `msg_${Date.now() + 1}`,
-        content: `我已经收到您上传的文件"${file.name}"，正在为您分析处理中...`,
-        sender: "bot",
-        timestamp: new Date(),
-        type: "text",
-      }
-
-      if (currentChatId) {
-        setChats((prev) =>
-          prev.map((chat) => {
-            if (chat.id === currentChatId) {
-              return {
-                ...chat,
-                messages: [...chat.messages, botReply],
-              }
-            }
-            return chat
-          }),
-        )
-      }
-
-      setIsWaitingForReply(false) // 回复完成，重置状态
-      // 自动获取输入框焦点
-      setTimeout(() => {
-        inputRef.current?.focus()
-      }, 100)
-    }, 2000)
-  }
-
   // 格式化时间
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString("zh-CN", {
@@ -897,6 +805,25 @@ export default function MultimodalChatbot() {
     }
   };
 
+  // 文件上传状态
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  // 文件上传
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || isWaitingForReply) return;
+    setSelectedFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  // 渲染文件图标
+  const renderFileIcon = (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (file.type.startsWith("image/")) return <Image className="w-5 h-5" />;
+    if (ext === "pdf") return <FileIcon className="w-5 h-5" />;
+    if (["doc", "docx"].includes(ext || "")) return <FileIcon className="w-5 h-5" />;
+    if (["txt", "md"].includes(ext || "")) return <FileText className="w-5 h-5" />;
+    return <FileText className="w-5 h-5" />;
+  };
   return (
     <div className="flex h-screen bg-background">
       {/* 左下角浮动图标按钮，仅在侧边栏关闭时显示 */}
@@ -1189,6 +1116,24 @@ export default function MultimodalChatbot() {
               {/* 输入区域 */}
               <div className="border-t p-4">
                 <div className="max-w-4xl mx-auto">
+                  {/* 文件预览区域 */}
+                  {selectedFile && (
+                    <div className="relative inline-flex items-center p-2 mb-2 bg-muted rounded shadow">
+                      {renderFileIcon(selectedFile)}
+                      <span className="ml-2 text-sm max-w-[160px] truncate inline-block align-middle">{selectedFile.name}</span>
+                      <button
+                        className="absolute -top-2 -right-2 bg-white rounded-full border shadow p-1 hover:bg-red-100"
+                        onClick={() => {
+                          setSelectedFile(null);
+                          if (fileInputRef.current) fileInputRef.current.value = "";
+                        }}
+                        title="删除"
+                        type="button"
+                      >
+                        <X className="w-4 h-4 text-red-500" />
+                      </button>
+                    </div>
+                  )}
                   {/* 语音提示信息，放在输入框上方 */}
                   {isRecording && (
                     <div className="mb-2 text-center">
