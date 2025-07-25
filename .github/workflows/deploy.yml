@@ -1,0 +1,45 @@
+# .github/workflows/deploy.yml
+
+name: Deploy to Mac mini via SSH
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy multimodal-chatbot to Mac mini
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH key and known hosts
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+
+      - name: Deploy to Mac mini Server
+        run: |
+          ssh -p 6000 ayr@47.117.144.223 <<EOF
+            set -e
+            echo "Navigate to project directory"
+            cd /Users/ayr/sparkai/multimodal-chatbot/
+
+            echo "Pull latest code from GitHub"
+            git pull origin main
+
+            echo "Install dependencies"
+            pnpm install --no-interactive
+
+            echo "Build sparkai_web"
+            pnpm build
+
+            echo "Restart multimodal-chatbot"
+            #pm2 restart sparkai_web
+
+            echo "Deployment completed multimodal-chatbot successfully"
+          EOF
