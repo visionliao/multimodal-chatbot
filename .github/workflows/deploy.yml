@@ -33,7 +33,7 @@ jobs:
             git pull origin main
 
             echo "Install dependencies"
-            pnpm install --no-interactive
+            pnpm install
 
             echo "Build sparkai_web"
             pnpm build
