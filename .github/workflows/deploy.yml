@@ -33,10 +33,10 @@ jobs:
             git pull origin main
 
             echo "Install dependencies"
-            pnpm install
+            /Users/ayr/.nvm/versions/node/v22.17.1/bin/pnpm install
 
             echo "Build sparkai_web"
-            pnpm build
+            /Users/ayr/.nvm/versions/node/v22.17.1/bin/pnpm build
 
             echo "Restart multimodal-chatbot"
             #pm2 restart sparkai_web
