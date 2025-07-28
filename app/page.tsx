@@ -58,7 +58,8 @@ interface Message {
   content: string
   sender: "user" | "bot"
   timestamp: Date
-  type: "text" | "file" | "audio"
+  // 0: text, 1: image, 2: txt, 3: pdf, 4: doc, 5: unknown
+  type: number
   fileName?: string
 }
 
@@ -161,8 +162,8 @@ export default function MultimodalChatbot() {
               id: m.message_id,
               content: m.content,
               sender: m.message_source === 0 ? "user" : "bot",
-              type: m.type === 0 ? "text" : m.type === 1 ? "file" : "text", // 这里只区分文本/文件，后续可扩展
-              fileName: m.type === 1 ? m.file_name : undefined,
+              type: m.type,
+              fileName: m.type !== 0 ? m.file_name : undefined,
               timestamp: m.created_at ? new Date(m.created_at) : new Date(),
             }));
             return {
@@ -267,7 +268,7 @@ export default function MultimodalChatbot() {
                   content: botStream.message,
                   sender: "bot" as "bot",
                   timestamp: new Date(),
-                  type: "text" as "text",
+                  type: 0,
                   fileName: undefined,
                 },
               ],
@@ -317,7 +318,7 @@ export default function MultimodalChatbot() {
               content: msg.message,
               sender: 'user' as const,
               timestamp: new Date(msg.timestamp),
-              type: 'text' as const,
+              type: 0,
             }],
             lastMessage: msg.message,
             timestamp: new Date(),
@@ -336,7 +337,7 @@ export default function MultimodalChatbot() {
               content: msg.message,
               sender: 'user' as const,
               timestamp: new Date(msg.timestamp),
-              type: 'text' as const,
+              type: 0,
             }],
             lastMessage: msg.message,
             timestamp: new Date(),
@@ -357,7 +358,7 @@ export default function MultimodalChatbot() {
                     content: msg.message,
                     sender: 'user' as const,
                     timestamp: new Date(msg.timestamp),
-                    type: 'text' as const,
+                    type: 0,
                   },
                 ],
                 lastMessage: msg.message,
@@ -383,7 +384,7 @@ export default function MultimodalChatbot() {
                   content: msg.message,
                   sender: 'user' as const,
                   timestamp: new Date(msg.timestamp),
-                  type: 'text' as const,
+                  type: 0,
                 },
               ],
               lastMessage: msg.message,
@@ -414,7 +415,7 @@ export default function MultimodalChatbot() {
         if (chat.id !== currentChatId) return chat;
         // 查找是否已有该转录id的气泡
         const idx = chat.messages.findIndex(
-          (m) => m.id === transcriptionId && m.sender === "user" && m.type === "text"
+          (m) => m.id === transcriptionId && m.sender === "user" && m.type === 0
         );
         if (idx !== -1) {
           // 更新内容
@@ -436,7 +437,7 @@ export default function MultimodalChatbot() {
                 content: fullText,
                 sender: "user",
                 timestamp: new Date(),
-                type: "text",
+                type: 0,
               },
             ],
             lastMessage: fullText,
@@ -460,7 +461,7 @@ export default function MultimodalChatbot() {
       if (livekitStatus === 'disconnected' && connectRoom) connectRoom();
       return;
     }
-    if (!inputValue.trim() || isWaitingForReply) return;
+    if ((!inputValue.trim() && !selectedFile) || isWaitingForReply) return;
     setIsWaitingForReply(true);
 
     // 发送到 livekit
@@ -472,12 +473,36 @@ export default function MultimodalChatbot() {
       }
     }
 
+    let type = 0;
+    let fileName = undefined;
+    if (selectedFile) {
+      // 复用renderFileIcon的逻辑判断文件类型
+      const mime = selectedFile.type;
+      const ext = selectedFile.name.split('.').pop()?.toLowerCase();
+
+      if (mime.startsWith("image/")) type = 1;
+      else if (mime === "text/plain") type = 2;
+      else if (mime === "application/pdf") type = 3;
+      else if (mime === "application/msword" || mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") type = 4;
+      else if (!mime) {
+        if (["jpg", "jpeg", "png", "gif", "bmp", "webp"].includes(ext || "")) type = 1;
+        else if (["txt", "md"].includes(ext || "")) type = 2;
+        else if (["pdf"].includes(ext || "")) type = 3;
+        else if (["doc", "docx"].includes(ext || "")) type = 4;
+        else type = 5;
+      } else {
+        type = 5;
+      }
+      fileName = selectedFile.name;
+    }
+
     const newMessage: Message = {
       id: `msg_${Date.now()}`,
       content: inputValue,
       sender: "user",
       timestamp: new Date(),
-      type: "text",
+      type,
+      ...(fileName ? { fileName } : {})
     }
 
     // 发送消息 只在 chats.length === 0 时新建聊天
@@ -499,7 +524,7 @@ export default function MultimodalChatbot() {
       setIsWaitingForReply(false); // 立即解锁
       await saveChatToDB(user, mergedChat.id, inputValue);
       newMessage.id = `msg_${Date.now()}`;
-      await saveMessageToDB(user, newMessage.id, mergedChat.id, inputValue, 0, 0);
+      await saveMessageToDB(user, newMessage.id, mergedChat.id, inputValue, 0, type);
     } else if (chats.length === 0) {
       const firstMessageTitle = inputValue.trim().slice(0, 30);
       const newChatId = `chat_${Date.now()}`;
@@ -515,10 +540,10 @@ export default function MultimodalChatbot() {
       setIsWaitingForReply(false); // 立即解锁
       await saveChatToDB(user, newChatId, inputValue);
       newMessage.id = `msg_${Date.now()}`;
-      await saveMessageToDB(user, newMessage.id, newChatId, inputValue, 0, 0);
+      await saveMessageToDB(user, newMessage.id, newChatId, inputValue, 0, type);
     } else if (currentChatId) {
       await saveChatToDB(user, currentChatId, inputValue);
-      await saveMessageToDB(user, newMessage.id, currentChatId, inputValue, 0, 0);
+      await saveMessageToDB(user, newMessage.id, currentChatId, inputValue, 0, type);
       // 更新现有聊天记录
       setChats((prev) => {
         const result = prev.map((chat) => {
@@ -537,7 +562,9 @@ export default function MultimodalChatbot() {
       setIsWaitingForReply(false); // 立即解锁
     }
 
-    setInputValue("")
+    setInputValue("");
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
 
     // 模拟AI回复，包含错误处理和超时
     const errorTimeout = setTimeout(() => {
@@ -547,7 +574,7 @@ export default function MultimodalChatbot() {
           content: "抱歉，回复超时了，请稍后重试。",
           sender: "bot",
           timestamp: new Date(),
-          type: "text",
+          type: 0,
         }
 
         if (currentChatId) {
@@ -731,7 +758,7 @@ export default function MultimodalChatbot() {
       content: "您好！我是您的Spark AI助手，有任何关于Spark公寓的问题都可以咨询我。",
       sender: "bot",
       timestamp: new Date(),
-      type: "text",
+      type: 0,
     };
     const newTempChat: Chat = {
       id: newChatId,
@@ -806,6 +833,38 @@ export default function MultimodalChatbot() {
     }
   };
 
+  // 文件类型转int - 复用renderFileIcon的逻辑
+  function renderFileIconByType(type: number) {
+    switch(type) {
+      case 1: return <Image className="w-5 h-5" />;
+      case 2: return <FileText className="w-5 h-5" />;
+      case 3: return <FileIcon className="w-5 h-5" />;
+      case 4: return <FileIcon className="w-5 h-5" />;
+      case 5: return <FileQuestion className="w-5 h-5" />;
+      default: return null;
+    }
+  }
+
+  // 根据type渲染文件图标
+  function renderFileIcon(file: File) {
+    const mime = file.type;
+    const ext = file.name.split('.').pop()?.toLowerCase();
+
+    if (mime.startsWith("image/")) return <Image className="w-5 h-5" />;
+    if (mime === "text/plain") return <FileText className="w-5 h-5" />;
+    if (mime === "application/pdf") return <FileIcon className="w-5 h-5" />;
+    if (mime === "application/msword" || mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return <FileIcon className="w-5 h-5" />;
+    // 兜底：如果 MIME type 为空，再用后缀
+    if (!mime) {
+      if (["jpg", "jpeg", "png", "gif", "bmp", "webp"].includes(ext || "")) return <Image className="w-5 h-5" />;
+      if (["txt", "md"].includes(ext || "")) return <FileText className="w-5 h-5" />;
+      if (["pdf"].includes(ext || "")) return <FileIcon className="w-5 h-5" />;
+      if (["doc", "docx"].includes(ext || "")) return <FileIcon className="w-5 h-5" />;
+    }
+    // 其它未知类型
+    return <FileQuestion className="w-5 h-5" />;
+  };
+
   // 文件上传状态
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   // 文件上传
@@ -821,25 +880,6 @@ export default function MultimodalChatbot() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  // 渲染文件图标
-  const renderFileIcon = (file: File) => {
-    const mime = file.type;
-    const ext = file.name.split('.').pop()?.toLowerCase();
-
-    if (mime.startsWith("image/")) return <Image className="w-5 h-5" />;
-    if (mime === "application/pdf") return <FileIcon className="w-5 h-5" />;
-    if (mime === "text/plain") return <FileText className="w-5 h-5" />;
-    if (mime === "application/msword" || mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return <FileIcon className="w-5 h-5" />;
-    // 兜底：如果 MIME type 为空，再用后缀
-    if (!mime) {
-      if (["jpg", "jpeg", "png", "gif", "bmp", "webp"].includes(ext || "")) return <Image className="w-5 h-5" />;
-      if (["pdf"].includes(ext || "")) return <FileIcon className="w-5 h-5" />;
-      if (["doc", "docx"].includes(ext || "")) return <FileIcon className="w-5 h-5" />;
-      if (["txt", "md"].includes(ext || "")) return <FileText className="w-5 h-5" />;
-    }
-    // 其它未知类型
-    return <FileQuestion className="w-5 h-5" />;
-  };
   return (
     <div className="flex h-screen bg-background">
       {/* 左下角浮动图标按钮，仅在侧边栏关闭时显示 */}
@@ -1085,16 +1125,12 @@ export default function MultimodalChatbot() {
                             message.sender === "user" ? "bg-primary text-primary-foreground ml-auto" : "bg-muted"
                           }`}
                         >
-                          {message.type === "file" && (
+                          {message.type !== 0 && (
                             <div className="flex items-center space-x-2 mb-1">
-                              <Paperclip className="h-4 w-4" />
-                              <span className="text-sm font-medium">{message.fileName}</span>
-                            </div>
-                          )}
-                          {message.type === "audio" && (
-                            <div className="flex items-center space-x-2 mb-1">
-                              <Mic className="h-4 w-4" />
-                              <span className="text-sm font-medium">语音消息</span>
+                              {renderFileIconByType(message.type)}
+                              <span className="text-sm font-medium max-w-[160px] truncate inline-block align-middle">
+                                {message.fileName}
+                              </span>
                             </div>
                           )}
                           <p className="text-sm whitespace-pre-line">{message.content}</p>
