@@ -49,7 +49,7 @@ import { toastAlert } from "@/components/ui/alert-toast";
 import { signIn, signOut, useSession, SessionProvider } from "next-auth/react"
 import { useIsMobile } from "@/components/ui/use-mobile";
 import { useRouter } from 'next/navigation';
-import { saveChatToDB, saveMessageToDB, getChatsByUserId, getMessagesByChatId, updateChatTitle, deleteChatById } from '@/lib/db/utils';
+import { saveChatToDB, saveMessageToDB, getChatsByUserId, getMessagesByChatId, updateChatTitle, deleteChatById, savePictureToDB, saveDocumentToDB, getPictureFileName, getDocumentFileName } from '@/lib/db/utils';
 import { RoomEvent } from 'livekit-client';
 
 
@@ -157,14 +157,26 @@ export default function MultimodalChatbot() {
         const chatList = await Promise.all(
           chats.map(async (c: any) => {
             const messagesRaw = await getMessagesByChatId(user, c.chat_id);
-            // 转换为前端 Message 结构
-            const messages = messagesRaw.map((m: any) => ({
-              id: m.message_id,
-              content: m.content,
-              sender: m.message_source === 0 ? "user" : "bot",
-              type: m.type,
-              fileName: m.type !== 0 ? m.file_name : undefined,
-              timestamp: m.created_at ? new Date(m.created_at) : new Date(),
+            // 批量查文件名
+            const messages = await Promise.all(messagesRaw.map(async (m: any) => {
+              let fileName: string | null | undefined = undefined;
+              if (m.type && m.type !== 0) {
+                if (m.type === 1) {
+                  // 图片
+                  fileName = await getPictureFileName(user, m.message_id);
+                } else {
+                  // 文档
+                  fileName = await getDocumentFileName(user, m.message_id);
+                }
+              }
+              return {
+                id: m.message_id,
+                content: m.content,
+                sender: m.message_source === 0 ? "user" : "bot",
+                type: m.type,
+                fileName: fileName || undefined,
+                timestamp: m.created_at ? new Date(m.created_at) : new Date(),
+              };
             }));
             return {
               id: c.chat_id,
@@ -461,7 +473,7 @@ export default function MultimodalChatbot() {
       if (livekitStatus === 'disconnected' && connectRoom) connectRoom();
       return;
     }
-    if ((!inputValue.trim() && !selectedFile) || isWaitingForReply) return;
+    if ((!inputValue.trim() && !selectedFile) || isWaitingForReply || (selectedFile && (!uploadedFileInfo || isUploading))) return;
     setIsWaitingForReply(true);
 
     // 发送到 livekit
@@ -475,11 +487,10 @@ export default function MultimodalChatbot() {
 
     let type = 0;
     let fileName = undefined;
-    if (selectedFile) {
-      // 复用renderFileIcon的逻辑判断文件类型
+    let filePath = undefined;
+    if (selectedFile && uploadedFileInfo) {
       const mime = selectedFile.type;
       const ext = selectedFile.name.split('.').pop()?.toLowerCase();
-
       if (mime.startsWith("image/")) type = 1;
       else if (mime === "text/plain") type = 2;
       else if (mime === "application/pdf") type = 3;
@@ -493,7 +504,8 @@ export default function MultimodalChatbot() {
       } else {
         type = 5;
       }
-      fileName = selectedFile.name;
+      fileName = uploadedFileInfo.file_name;
+      filePath = uploadedFileInfo.file_path;
     }
 
     const newMessage: Message = {
@@ -504,6 +516,8 @@ export default function MultimodalChatbot() {
       type,
       ...(fileName ? { fileName } : {})
     }
+
+    let realMessageId = newMessage.id;
 
     // 发送消息 只在 chats.length === 0 时新建聊天
     if (tempChat) {
@@ -524,7 +538,16 @@ export default function MultimodalChatbot() {
       setIsWaitingForReply(false); // 立即解锁
       await saveChatToDB(user, mergedChat.id, inputValue);
       newMessage.id = `msg_${Date.now()}`;
-      await saveMessageToDB(user, newMessage.id, mergedChat.id, inputValue, 0, type);
+      const res = await saveMessageToDB(user, newMessage.id, mergedChat.id, inputValue, 0, type);
+      if (res && res.message_id) realMessageId = res.message_id;
+      // 插入图片/文档表
+      if (selectedFile && uploadedFileInfo) {
+        if (type === 1) {
+          await savePictureToDB(user, realMessageId, filePath || '', fileName || '', '');
+        } else {
+          await saveDocumentToDB(user, realMessageId, filePath || '', fileName || '', '');
+        }
+      }
     } else if (chats.length === 0) {
       const firstMessageTitle = inputValue.trim().slice(0, 30);
       const newChatId = `chat_${Date.now()}`;
@@ -540,11 +563,26 @@ export default function MultimodalChatbot() {
       setIsWaitingForReply(false); // 立即解锁
       await saveChatToDB(user, newChatId, inputValue);
       newMessage.id = `msg_${Date.now()}`;
-      await saveMessageToDB(user, newMessage.id, newChatId, inputValue, 0, type);
+      const res = await saveMessageToDB(user, newMessage.id, newChatId, inputValue, 0, type);
+      if (res && res.message_id) realMessageId = res.message_id;
+      if (selectedFile && uploadedFileInfo) {
+        if (type === 1) {
+          await savePictureToDB(user, realMessageId, filePath || '', fileName || '', '');
+        } else {
+          await saveDocumentToDB(user, realMessageId, filePath || '', fileName || '', '');
+        }
+      }
     } else if (currentChatId) {
       await saveChatToDB(user, currentChatId, inputValue);
-      await saveMessageToDB(user, newMessage.id, currentChatId, inputValue, 0, type);
-      // 更新现有聊天记录
+      const res = await saveMessageToDB(user, newMessage.id, currentChatId, inputValue, 0, type);
+      if (res && res.message_id) realMessageId = res.message_id;
+      if (selectedFile && uploadedFileInfo) {
+        if (type === 1) {
+          await savePictureToDB(user, realMessageId, filePath || '', fileName || '', '');
+        } else {
+          await saveDocumentToDB(user, realMessageId, filePath || '', fileName || '', '');
+        }
+      }
       setChats((prev) => {
         const result = prev.map((chat) => {
           if (chat.id === currentChatId) {
@@ -564,7 +602,14 @@ export default function MultimodalChatbot() {
 
     setInputValue("");
     setSelectedFile(null);
+    setFileUploadProgress(0);
+    setUploadedFileInfo(null);
+    setIsUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
+
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
 
     // 模拟AI回复，包含错误处理和超时
     const errorTimeout = setTimeout(() => {
@@ -867,18 +912,61 @@ export default function MultimodalChatbot() {
 
   // 文件上传状态
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileUploadProgress, setFileUploadProgress] = useState<number>(0);
+  const [uploadedFileInfo, setUploadedFileInfo] = useState<{ file_path: string; file_name: string } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
   // 文件上传
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || isWaitingForReply) return;
+    if (!file || isWaitingForReply || isUploading) return;
     if (file.size > 10 * 1024 * 1024) { // 10MB 限制
       toastAlert({ title: '文件大小超出限制', description: '请选择不超过 10MB 的文件' });
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
     setSelectedFile(file);
+    setFileUploadProgress(0);
+    setUploadedFileInfo(null);
+    setIsUploading(true);
+    // 上传文件
+    const formData = new FormData();
+    formData.append('file', file);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload', true);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        setFileUploadProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      setIsUploading(false);
+      if (xhr.status === 200) {
+        const res = JSON.parse(xhr.responseText);
+        setUploadedFileInfo(res);
+        setFileUploadProgress(100);
+      } else {
+        toastAlert({ title: '文件上传失败', description: xhr.statusText });
+        setSelectedFile(null);
+        setFileUploadProgress(0);
+        setUploadedFileInfo(null);
+      }
+    };
+    xhr.onerror = () => {
+      setIsUploading(false);
+      toastAlert({ title: '文件上传失败', description: '网络错误' });
+      setSelectedFile(null);
+      setFileUploadProgress(0);
+      setUploadedFileInfo(null);
+    };
+    xhr.send(formData);
     if (fileInputRef.current) fileInputRef.current.value = "";
-  }
+
+    // 选择文件后立即聚焦输入框，方便用户输入附带文本
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+  };
 
   return (
     <div className="flex h-screen bg-background">
@@ -1200,10 +1288,20 @@ export default function MultimodalChatbot() {
                       variant="outline"
                       onClick={() => fileInputRef.current?.click()}
                       className="shrink-0"
-                      disabled={isWaitingForReply || isRecording}
+                      disabled={Boolean(isWaitingForReply || isRecording || isUploading || (selectedFile && !uploadedFileInfo))}
                     >
                       <Paperclip className="h-4 w-4" />
                     </Button>
+                    {fileUploadProgress > 0 && fileUploadProgress < 100 && (
+                      <div className="shrink-0 text-xs text-muted-foreground">
+                        {fileUploadProgress}%
+                      </div>
+                    )}
+                    {fileUploadProgress === 100 && uploadedFileInfo && (
+                      <div className="shrink-0 text-xs text-muted-foreground">
+                        上传成功
+                      </div>
+                    )}
 
                     <Button
                       size="icon"
@@ -1236,14 +1334,14 @@ export default function MultimodalChatbot() {
                           }
                         }}
                         className="pr-12"
-                        disabled={isWaitingForReply || isRecording}
+                        disabled={Boolean(isWaitingForReply || isRecording || isUploading || (selectedFile && !uploadedFileInfo))}
                       />
                       <Button
                         size="icon"
                         onClick={() => {
                           if (!isWaitingForReply && !isRecording && inputValue.trim()) sendMessage();
                         }}
-                        disabled={!inputValue.trim() || isWaitingForReply || isRecording}
+                        disabled={!inputValue.trim() || isWaitingForReply || isRecording || isUploading || Boolean(selectedFile && !uploadedFileInfo)}
                         className="absolute right-1 top-1 h-8 w-8"
                       >
                         <Send className="h-4 w-4" />
@@ -1257,7 +1355,7 @@ export default function MultimodalChatbot() {
                     className="hidden"
                     onChange={handleFileUpload}
                     accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
-                    disabled={isWaitingForReply || isRecording}
+                    disabled={Boolean(isWaitingForReply || isRecording || isUploading || (selectedFile && !uploadedFileInfo))}
                   />
                 </div>
               </div>

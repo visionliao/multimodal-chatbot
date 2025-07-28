@@ -77,6 +77,7 @@ export const documents = pgTable('spark_documents', {
     .notNull()
     .references(() => messages.message_id, { onDelete: 'cascade' }),
   file_path: text('file_path').notNull(),
+  file_name: varchar('file_name', { length: 255 }),
   description: text('description'),
   upload_time: timestamp('upload_time').defaultNow(),
 });
@@ -88,6 +89,7 @@ export const pictures = pgTable('spark_picture', {
     .notNull()
     .references(() => messages.message_id, { onDelete: 'cascade' }),
   file_path: text('file_path').notNull(),
+  file_name: varchar('file_name', { length: 255 }),
   description: text('description'),
   upload_time: timestamp('upload_time').defaultNow(),
 });
@@ -149,6 +151,7 @@ async function ensureTablesExist() {
       document_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       message_id VARCHAR(50) NOT NULL REFERENCES spark_messages(message_id) ON DELETE CASCADE,
       file_path TEXT NOT NULL,
+      file_name VARCHAR(255),
       description TEXT,
       upload_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
@@ -160,6 +163,7 @@ async function ensureTablesExist() {
       picture_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       message_id VARCHAR(50) NOT NULL REFERENCES spark_messages(message_id) ON DELETE CASCADE,
       file_path TEXT NOT NULL,
+      file_name VARCHAR(255),
       description TEXT,
       upload_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
@@ -302,18 +306,18 @@ export async function deleteMessage(messageId: string) {
 
 // 添加文档
 export async function addDocument(
-  documentId: string, // 可选传入 document_id（否则使用默认 UUID）
   messageId: string,
   filePath: string,
+  fileName: string,
   description?: string
 ) {
   await ensureTablesExist();
 
   await db.insert(documents).values({
-    document_id: documentId,
     message_id: messageId,
     file_path: filePath,
-    description,
+    file_name: fileName,
+    description: description,
   });
 
   return { success: true, message_id: messageId };
@@ -328,18 +332,18 @@ export async function getDocumentsByMessageId(messageId: string) {
 
 // 添加图片
 export async function addPicture(
-  pictureId: string, // 可选传入 picture_id（否则使用默认 UUID）
   messageId: string,
   filePath: string,
+  fileName: string,
   description?: string
 ) {
   await ensureTablesExist();
 
   await db.insert(pictures).values({
-    picture_id: pictureId,
     message_id: messageId,
     file_path: filePath,
-    description,
+    file_name: fileName,
+    description: description,
   });
 
   return { success: true, message_id: messageId };

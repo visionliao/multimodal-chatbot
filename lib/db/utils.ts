@@ -23,7 +23,7 @@ export const saveMessageToDB = async (
 ) => {
   if (!user) return;
   try {
-    await fetch('/api/message', {
+    const res = await fetch('/api/message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -34,8 +34,90 @@ export const saveMessageToDB = async (
         type: type // type： 0-文本；1-图片；2-文档
       }),
     });
+    return await res.json();
   } catch (error) {
     console.error("保存消息失败", error);
+    return null;
+  }
+};
+
+// 保存图片到DB
+export const savePictureToDB = async (
+  user: any,
+  messageId: string,
+  filePath: string,
+  fileName: string,
+  description: string
+) => {
+  if (!user) return;
+  try {
+    const res = await fetch('/api/picture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messageId: messageId,
+        filePath: filePath,
+        fileName: fileName,
+        description: description
+      }),
+    });
+    return await res.json();
+  } catch (error) {
+    console.error('保存图片失败', error);
+    return null;
+  }
+};
+
+// 获取某条消息的图片
+export const getPictureFileName = async (user: any, messageId: string) => {
+  if (!user) return;
+  try {
+    const res = await fetch(`/api/picture?messageId=${encodeURIComponent(messageId)}`, { method: 'GET' });
+    const data = await res.json();
+    return data.fileName || null;
+  } catch (error) {
+    console.error('获取图片名称失败', error);
+    return null;
+  }
+};
+
+// 保存文档到DB
+export const saveDocumentToDB = async (
+  user: any,
+  messageId: string,
+  filePath: string,
+  fileName: string,
+  description: string
+) => {
+  if (!user) return;
+  try {
+    const res = await fetch('/api/document', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messageId: messageId,
+        filePath: filePath,
+        fileName: fileName,
+        description: description
+      }),
+    });
+    return await res.json();
+  } catch (error) {
+    console.error('保存文档失败', error);
+    return null;
+  }
+};
+
+// 获取某条消息的文档
+export const getDocumentFileName = async (user: any, messageId: string) => {
+  if (!user) return;
+  try {
+    const res = await fetch(`/api/document?messageId=${encodeURIComponent(messageId)}`, { method: 'GET' });
+    const data = await res.json();
+    return data.fileName || null;
+  } catch (error) {
+    console.error('获取文件名称失败', error);
+    return null;
   }
 };
 
@@ -105,4 +187,4 @@ export const deleteChatById = async (user: any, chatId: string) => {
     console.error('删除聊天记录失败', error);
     return { success: false, error };
   }
-}; 
+};
