@@ -24,6 +24,7 @@ import {
   FileIcon,
   X,
   FileQuestion,
+  CheckCircle2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -920,49 +921,63 @@ export default function MultimodalChatbot() {
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || isWaitingForReply || isUploading) return;
+
     if (file.size > 10 * 1024 * 1024) { // 10MB 限制
       toastAlert({ title: '文件大小超出限制', description: '请选择不超过 10MB 的文件' });
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
+
+    // 设置初始状态
     setSelectedFile(file);
-    setFileUploadProgress(0);
+    setFileUploadProgress(0); // 进度条暂时无法精确显示，先置为0
     setUploadedFileInfo(null);
     setIsUploading(true);
-    // 上传文件
-    const formData = new FormData();
-    formData.append('file', file);
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/upload', true);
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        setFileUploadProgress(Math.round((e.loaded / e.total) * 100));
-      }
-    };
-    xhr.onload = () => {
-      setIsUploading(false);
-      if (xhr.status === 200) {
-        const res = JSON.parse(xhr.responseText);
+
+    try {
+      // 使用 fetch API 进行流式上传
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          // 发送自定义请求头，供后端读取文件元数据
+          'x-file-name': encodeURIComponent(file.name),
+          'x-file-type': encodeURIComponent(file.type),
+        },
+        // 直接将 File 对象作为请求体，它本身就是可读流
+        body: file,
+        // 对于 Node.js v18+ 的 fetch，建议添加此项以确保流式传输
+        // @ts-ignore - 'duplex' 在某些旧的TS定义中可能不存在，但在现代浏览器和Node.js中是支持的
+        duplex: 'half',
+      });
+
+      setIsUploading(false); // 上传过程结束（无论成功或失败）
+
+      if (response.ok) {
+        // 如果服务器返回成功 (status 200-299)
+        const res = await response.json();
         setUploadedFileInfo(res);
-        setFileUploadProgress(100);
+        setFileUploadProgress(100); // 标记为上传完成
       } else {
-        toastAlert({ title: '文件上传失败', description: xhr.statusText });
-        setSelectedFile(null);
-        setFileUploadProgress(0);
+        // 如果服务器返回错误
+        const error = await response.json().catch(() => ({ error: response.statusText }));
+        toastAlert({ title: '文件上传失败', description: error.error || '服务器返回错误' });
+        setSelectedFile(null); // 清理状态
         setUploadedFileInfo(null);
       }
-    };
-    xhr.onerror = () => {
+    } catch (error) {
+      // 如果发生网络错误等
       setIsUploading(false);
-      toastAlert({ title: '文件上传失败', description: '网络错误' });
+      toastAlert({ title: '文件上传失败', description: '网络连接错误' });
       setSelectedFile(null);
-      setFileUploadProgress(0);
       setUploadedFileInfo(null);
-    };
-    xhr.send(formData);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    } finally {
+      // 确保文件输入被清空
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
 
-    // 选择文件后立即聚焦输入框，方便用户输入附带文本
+    // 选择文件后立即聚焦输入框 (保留您原有的逻辑)
     setTimeout(() => {
       inputRef.current?.focus();
     }, 100);
@@ -1258,19 +1273,37 @@ export default function MultimodalChatbot() {
                 <div className="max-w-4xl mx-auto">
                   {/* 文件预览区域 */}
                   {selectedFile && (
-                    <div className="relative inline-flex items-center p-2 mb-2 bg-muted rounded shadow">
-                      {renderFileIcon(selectedFile)}
-                      <span className="ml-2 text-sm max-w-[160px] truncate inline-block align-middle">{selectedFile.name}</span>
+                    <div className="relative inline-flex items-center p-2 pl-3 mb-2 bg-muted rounded-lg shadow-sm">
+                      {/* 文件图标 */}
+                      <div className="flex-shrink-0">
+                        {renderFileIcon(selectedFile)}
+                      </div>
+
+                      {/* 文件名 (恢复自适应宽度，并设置最大宽度) */}
+                      <span className="ml-2 text-sm max-w-[200px] truncate" title={selectedFile.name}>
+                        {selectedFile.name}
+                      </span>
+                      {/* 状态显示区域 (紧跟在文件名后面) */}
+                      <div className="ml-2 flex-shrink-0">
+                        {isUploading && (
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {fileUploadProgress > 0 ? `${fileUploadProgress}%` : '...'}
+                          </span>
+                        )}
+                        {!isUploading && uploadedFileInfo && (
+                          <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        )}
+                      </div>
+
+                      {/* 删除/取消按钮 */}
                       <button
-                        className="absolute -top-2 -right-2 bg-white rounded-full border shadow p-1 hover:bg-red-100"
-                        onClick={() => {
-                          setSelectedFile(null);
-                          if (fileInputRef.current) fileInputRef.current.value = "";
-                        }}
-                        title="删除"
+                        className="absolute -top-2 -right-2 bg-white rounded-full border shadow p-0.5 hover:bg-red-100 disabled:opacity-50"
+                        onClick={() => setSelectedFile(null)}
+                        title="取消"
                         type="button"
+                        disabled={isUploading}
                       >
-                        <X className="w-4 h-4 text-red-500" />
+                        <X className="w-3 h-3 text-red-500" />
                       </button>
                     </div>
                   )}
@@ -1292,16 +1325,6 @@ export default function MultimodalChatbot() {
                     >
                       <Paperclip className="h-4 w-4" />
                     </Button>
-                    {fileUploadProgress > 0 && fileUploadProgress < 100 && (
-                      <div className="shrink-0 text-xs text-muted-foreground">
-                        {fileUploadProgress}%
-                      </div>
-                    )}
-                    {fileUploadProgress === 100 && uploadedFileInfo && (
-                      <div className="shrink-0 text-xs text-muted-foreground">
-                        上传成功
-                      </div>
-                    )}
 
                     <Button
                       size="icon"
