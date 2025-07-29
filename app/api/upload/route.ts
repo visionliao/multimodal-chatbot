@@ -5,6 +5,14 @@ import { getServerSession } from 'next-auth';
 import { authConfig } from '@/app/auth.config';
 
 export const runtime = 'nodejs';
+// 增加此路由段配置来覆盖默认的 1MB 请求体大小限制
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '12mb', // 设置为 12MB，略大于前端10MB的限制
+    },
+  },
+};
 
 function isImage(mime: string, ext: string) {
   return mime.startsWith('image/') || ["jpg","jpeg","png","gif","bmp","webp"].includes(ext);
