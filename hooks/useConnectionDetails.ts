@@ -22,6 +22,7 @@ export default function useConnectionDetails() {
     fetch(url.toString())
       .then((res) => res.json())
       .then((data) => {
+        console.log('%c[DEBUG] Fetched Connection Details:', 'color: #22a5f7; font-weight: bold;', data);
         setConnectionDetails(data);
       })
       .catch((error) => {
