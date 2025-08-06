@@ -104,6 +104,14 @@ export const verificationCodes = pgTable('spark_verification_codes', {
   created_at: timestamp('created_at').defaultNow(),
 });
 
+// 临时用户对话记录表 spark_temp_messages
+export const tempMessages = pgTable('spark_temp_messages', {
+  temp_message_id: varchar('temp_message_id', { length: 50 }).notNull().primaryKey(),
+  content: text('content').notNull(),
+  message_source: integer('message_source').notNull(), // 0=用户提问, 1=模型回复
+  created_at: timestamp('created_at').defaultNow(),
+  type: integer('type').default(0), // 0=text, 1=image, 2=document
+});
 
 // ======================
 // 工具函数：确保表存在
@@ -188,6 +196,17 @@ async function ensureTablesExist() {
       expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
       used BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+
+  // spark_temp_messages
+  await client`
+    CREATE TABLE IF NOT EXISTS spark_temp_messages (
+      temp_message_id VARCHAR(50) PRIMARY KEY,
+      content TEXT NOT NULL,
+      message_source INTEGER NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      type INTEGER DEFAULT 0
     );
   `;
   isInitialized = true;
@@ -421,3 +440,32 @@ export async function cleanupExpiredVerificationCodes() {
   return await db.delete(verificationCodes)
     .where(sql`expires_at <= NOW()`);
 }
+
+// ======================
+// 临时用户聊天记录函数
+// ======================
+// 添加临时用户对话记录
+export async function addTempMessage(
+  tempMessageId: string,
+  content: string,
+  messageSource: number,
+  type: number = 0
+) {
+  await ensureTablesExist();
+
+  await db.insert(tempMessages).values({
+    temp_message_id: tempMessageId,
+    content: content,
+    message_source: messageSource,
+    type: type,
+  })
+  .onConflictDoUpdate({
+      target: tempMessages.temp_message_id, // 冲突字段为 message_id
+      set: {
+        content, // 只更新 content 字段
+      },
+    });
+
+  return { success: true, temp_message_id: tempMessageId };
+}
+

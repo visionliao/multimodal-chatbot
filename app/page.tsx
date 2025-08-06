@@ -50,7 +50,18 @@ import { toastAlert } from "@/components/ui/alert-toast";
 import { signIn, signOut, useSession, SessionProvider } from "next-auth/react"
 import { useIsMobile } from "@/components/ui/use-mobile";
 import { useRouter } from 'next/navigation';
-import { saveChatToDB, saveMessageToDB, getChatsByUserId, getMessagesByChatId, updateChatTitle, deleteChatById, savePictureToDB, saveDocumentToDB, getPictureFileName, getDocumentFileName } from '@/lib/db/utils';
+import {
+  saveChatToDB,
+  saveMessageToDB,
+  getChatsByUserId,
+  getMessagesByChatId,
+  updateChatTitle,
+  deleteChatById,
+  savePictureToDB,
+  saveDocumentToDB,
+  getPictureFileName,
+  getDocumentFileName,
+  saveTempMessageToDB } from '@/lib/db/utils';
 import {
   RoomEvent,
   type RemoteParticipant,
@@ -378,8 +389,12 @@ export default function MultimodalChatbot() {
     };
     // 持久化
     (async () => {
-      await saveChatToDB(user, currentChatId, botStream.message);
-      await saveMessageToDB(user, botStream.id, currentChatId, botStream.message, 1, 0);
+      if (user) {
+        await saveChatToDB(user, currentChatId, botStream.message);
+        await saveMessageToDB(user, botStream.id, currentChatId, botStream.message, 1, 0);
+      } else {
+        await saveTempMessageToDB(botStream.id, botStream.message, 1, 0);
+      }
     })();
 
     setChats(prev =>
@@ -549,8 +564,12 @@ export default function MultimodalChatbot() {
     // console.log(`lhf 拼接后的完整文本: "${fullText}"`);
     if(currentChatId) {
       (async () => {
-        await saveChatToDB(user, currentChatId, fullText);
-        await saveMessageToDB(user, transcriptionId, currentChatId, fullText, 0, 0);
+        if (user) {
+          await saveChatToDB(user, currentChatId, fullText);
+          await saveMessageToDB(user, transcriptionId, currentChatId, fullText, 0, 0);
+        } else {
+          await saveTempMessageToDB(transcriptionId, fullText, 0, 0);
+        }
       })();
     }
 
@@ -668,17 +687,21 @@ export default function MultimodalChatbot() {
       setCurrentChatId(mergedChat.id);
       setTempChat(null);
       setIsWaitingForReply(false); // 立即解锁
-      await saveChatToDB(user, mergedChat.id, inputValue);
-      newMessage.id = `msg_${Date.now()}`;
-      const res = await saveMessageToDB(user, newMessage.id, mergedChat.id, inputValue, 0, type);
-      if (res && res.message_id) realMessageId = res.message_id;
-      // 插入图片/文档表
-      if (selectedFile && uploadedFileInfo) {
-        if (type === 1) {
-          await savePictureToDB(user, realMessageId, filePath || '', fileName || '', '');
-        } else {
-          await saveDocumentToDB(user, realMessageId, filePath || '', fileName || '', '');
+      if (user) {
+        await saveChatToDB(user, mergedChat.id, inputValue);
+        newMessage.id = `msg_${Date.now()}`;
+        const res = await saveMessageToDB(user, newMessage.id, mergedChat.id, inputValue, 0, type);
+        if (res && res.message_id) realMessageId = res.message_id;
+        // 插入图片/文档表
+        if (selectedFile && uploadedFileInfo) {
+          if (type === 1) {
+            await savePictureToDB(user, realMessageId, filePath || '', fileName || '', '');
+          } else {
+            await saveDocumentToDB(user, realMessageId, filePath || '', fileName || '', '');
+          }
         }
+      } else {
+        await saveTempMessageToDB(newMessage.id, inputValue, 0, type);
       }
     } else if (chats.length === 0) {
       const firstMessageTitle = inputValue.trim().slice(0, 30);
@@ -693,27 +716,35 @@ export default function MultimodalChatbot() {
       setChats([newChat]);
       setCurrentChatId(newChatId);
       setIsWaitingForReply(false); // 立即解锁
-      await saveChatToDB(user, newChatId, inputValue);
-      newMessage.id = `msg_${Date.now()}`;
-      const res = await saveMessageToDB(user, newMessage.id, newChatId, inputValue, 0, type);
-      if (res && res.message_id) realMessageId = res.message_id;
-      if (selectedFile && uploadedFileInfo) {
-        if (type === 1) {
-          await savePictureToDB(user, realMessageId, filePath || '', fileName || '', '');
-        } else {
-          await saveDocumentToDB(user, realMessageId, filePath || '', fileName || '', '');
+      if (user) {
+        await saveChatToDB(user, newChatId, inputValue);
+        newMessage.id = `msg_${Date.now()}`;
+        const res = await saveMessageToDB(user, newMessage.id, newChatId, inputValue, 0, type);
+        if (res && res.message_id) realMessageId = res.message_id;
+        if (selectedFile && uploadedFileInfo) {
+          if (type === 1) {
+            await savePictureToDB(user, realMessageId, filePath || '', fileName || '', '');
+          } else {
+            await saveDocumentToDB(user, realMessageId, filePath || '', fileName || '', '');
+          }
         }
+      } else {
+        await saveTempMessageToDB(newMessage.id, inputValue, 0, type);
       }
     } else if (currentChatId) {
-      await saveChatToDB(user, currentChatId, inputValue);
-      const res = await saveMessageToDB(user, newMessage.id, currentChatId, inputValue, 0, type);
-      if (res && res.message_id) realMessageId = res.message_id;
-      if (selectedFile && uploadedFileInfo) {
-        if (type === 1) {
-          await savePictureToDB(user, realMessageId, filePath || '', fileName || '', '');
-        } else {
-          await saveDocumentToDB(user, realMessageId, filePath || '', fileName || '', '');
+      if (user) {
+        await saveChatToDB(user, currentChatId, inputValue);
+        const res = await saveMessageToDB(user, newMessage.id, currentChatId, inputValue, 0, type);
+        if (res && res.message_id) realMessageId = res.message_id;
+        if (selectedFile && uploadedFileInfo) {
+          if (type === 1) {
+            await savePictureToDB(user, realMessageId, filePath || '', fileName || '', '');
+          } else {
+            await saveDocumentToDB(user, realMessageId, filePath || '', fileName || '', '');
+          }
         }
+      } else {
+        await saveTempMessageToDB(newMessage.id, inputValue, 0, type);
       }
       setChats((prev) => {
         const result = prev.map((chat) => {

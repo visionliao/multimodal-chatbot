@@ -188,3 +188,29 @@ export const deleteChatById = async (user: any, chatId: string) => {
     return { success: false, error };
   }
 };
+
+// 保存临时消息到数据库
+export const saveTempMessageToDB = async (
+  tempMessageId: string,
+  content: string,
+  messageSource: number,
+  type: number = 0
+) => {
+  if (!tempMessageId || content === undefined) return;
+  try {
+    const response = await fetch('/api/temp-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tempMessageId: tempMessageId,
+        content: content,
+        messageSource: messageSource,
+        type: type,
+      }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("保存临时消息失败", error);
+    return null;
+  }
+};
