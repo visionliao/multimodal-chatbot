@@ -94,6 +94,16 @@ export const pictures = pgTable('spark_picture', {
   upload_time: timestamp('upload_time').defaultNow(),
 });
 
+// 邮箱验证码表 spark_verification_codes
+export const verificationCodes = pgTable('spark_verification_codes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  email: varchar('email', { length: 100 }).notNull(),
+  code: varchar('code', { length: 6 }).notNull(),
+  expires_at: timestamp('expires_at').notNull(),
+  used: boolean('used').default(false),
+  created_at: timestamp('created_at').defaultNow(),
+});
+
 
 // ======================
 // 工具函数：确保表存在
@@ -166,6 +176,18 @@ async function ensureTablesExist() {
       file_name VARCHAR(255),
       description TEXT,
       upload_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+
+  // spark_verification_codes
+  await client`
+    CREATE TABLE IF NOT EXISTS spark_verification_codes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email VARCHAR(100) NOT NULL,
+      code VARCHAR(6) NOT NULL,
+      expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+      used BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
   `;
   isInitialized = true;
@@ -354,4 +376,48 @@ export async function getPicturesByMessageId(messageId: string) {
   await ensureTablesExist();
   return await db.select().from(pictures)
     .where(eq(pictures.message_id, messageId));
+}
+
+// 保存验证码
+export async function saveVerificationCode(email: string, code: string, expiresAt: Date) {
+  await ensureTablesExist();
+  return await db.insert(verificationCodes).values({
+    email,
+    code,
+    expires_at: expiresAt,
+  });
+}
+
+// 获取有效的验证码
+export async function getValidVerificationCode(email: string, code: string) {
+  await ensureTablesExist();
+  return await db.select().from(verificationCodes)
+    .where(
+      and(
+        eq(verificationCodes.email, email),
+        eq(verificationCodes.code, code),
+        eq(verificationCodes.used, false),
+        sql`expires_at > NOW()`
+      )
+    );
+}
+
+// 标记验证码为已使用
+export async function markVerificationCodeAsUsed(email: string, code: string) {
+  await ensureTablesExist();
+  return await db.update(verificationCodes)
+    .set({ used: true })
+    .where(
+      and(
+        eq(verificationCodes.email, email),
+        eq(verificationCodes.code, code)
+      )
+    );
+}
+
+// 清理过期验证码
+export async function cleanupExpiredVerificationCodes() {
+  await ensureTablesExist();
+  return await db.delete(verificationCodes)
+    .where(sql`expires_at <= NOW()`);
 }
