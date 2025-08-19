@@ -120,7 +120,9 @@ export default function MultimodalChatbot() {
   const [isWaitingForReply, setIsWaitingForReply] = useState(false) // 等待AI回复状态
 
   // 侧边栏收起/展开状态
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+  //const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   // 根据 isMobile 响应式调整 sidebarCollapsed
   useEffect(() => {
     setSidebarCollapsed(isMobile);
