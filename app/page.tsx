@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import {
   Send,
   Mic,
@@ -71,7 +71,7 @@ import {
   type LocalParticipant,
   DataPacket_Kind
 } from 'livekit-client';
-
+import showdown from 'showdown';
 
 interface Message {
   id: string
@@ -1147,6 +1147,14 @@ export default function MultimodalChatbot() {
     }, 100);
   };
 
+  const converter = useMemo(() => new showdown.Converter({
+    noHeaderId: true,       // 不为标题生成 id
+    simplifiedAutoLink: true, // 简化自动链接
+    strikethrough: true,      // 支持删除线
+    tables: true,             // 支持表格
+    ghCompatibleHeaderId: true,
+  }), []);
+
   return (
     <div className="flex h-screen bg-background">
       {/* 左下角浮动图标按钮，仅在侧边栏关闭时显示 */}
@@ -1400,7 +1408,13 @@ export default function MultimodalChatbot() {
                               </span>
                             </div>
                           )}
-                          <p className="text-sm whitespace-pre-line">{message.content}</p>
+                          {message.sender === 'bot' ? (
+                            <div
+                              dangerouslySetInnerHTML={{ __html: converter.makeHtml(message.content) }}
+                            />
+                          ) : (
+                            <div className="whitespace-pre-line">{message.content}</div>
+                          )}
                         </div>
                         <span
                           className={`text-xs text-muted-foreground ${
