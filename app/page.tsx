@@ -622,6 +622,7 @@ export default function MultimodalChatbot() {
   const sendMessage = async () => {
     if (livekitStatus !== 'connected') {
       toastAlert({ title: '正在连接服务器，请稍候...', description: '' });
+      console.log(`sendMessage livekitStatus: %c${livekitStatus}`);
       if (livekitStatus === 'disconnected') connectRoom();
       return;
     }
