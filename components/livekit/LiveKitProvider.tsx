@@ -36,8 +36,10 @@ export function LiveKitProvider({ children }: { children: React.ReactNode }) {
 
   // 连接房间
   const connectRoom = useCallback(() => {
+    console.log('LiveKitProvider connectRoom');
     if (!connectionDetails) return;
-    if (room.state === 'connected') return;
+    console.log(`%c[DEBUG] Curr Room Connection State: %c${room.state}`, 'color: black;', `color: ${room.state === 'connected' ? 'green' : 'orange'}; font-weight: bold;`);
+    if (room.state !== 'disconnected') return;
     room.connect(connectionDetails.serverUrl, connectionDetails.participantToken)
       .then(() => setConnected(true))
       .catch((error) => {
