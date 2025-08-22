@@ -62,15 +62,6 @@ import {
   getPictureFileName,
   getDocumentFileName,
   saveTempMessageToDB } from '@/lib/db/utils';
-import {
-  RoomEvent,
-  type RemoteParticipant,
-  type RemoteTrack,
-  type RemoteTrackPublication,
-  type LocalTrackPublication,
-  type LocalParticipant,
-  DataPacket_Kind
-} from 'livekit-client';
 import showdown from 'showdown';
 
 interface Message {
@@ -90,24 +81,6 @@ interface Chat {
   lastMessage: string
   timestamp: Date
 }
-
-export const AI_ERROR_CODES = {
-  // 1xxx: 会话/连接层错误
-  SESSION_CRITICAL_ERROR: 1001,
-
-  // 2xxx: 环境/配置层错误
-  ENV_PROXY_CONFIG_ERROR: 2001,
-  LLM_CONFIG_ERROR: 2002,
-  TTS_CONFIG_ERROR: 2003,
-
-  // 3xxx: LLM 运行时错误
-  LLM_API_ERROR: 3001,
-  LLM_TIMEOUT: 3101,
-
-  // 4xxx: TTS 运行时错误
-  TTS_API_ERROR: 4001,
-  TTS_SERVICE_DEGRADED: 4101,
-};
 
 export default function MultimodalChatbot() {
   const isMobile = useIsMobile();
@@ -145,148 +118,13 @@ export default function MultimodalChatbot() {
   const [showNicknameDialog, setShowNicknameDialog] = useState(false);
   const [newNickname, setNewNickname] = useState("");
 
-  const { room, connected, connectRoom } = useLiveKit()
+  const { room, connectRoom, isReadyToChat, connected: isClientConnected, isAgentConnected } = useLiveKit()
   const { send, messages: livekitMessages } = useChatAndTranscription();
 
   // 记录已插入的转录消息ID，避免重复
   const insertedTranscriptionIds = useRef<Set<string>>(new Set());
   // 记录最后一条livekit回复消息和当前聊天id
   const lastBotMessage = useRef<{ message: string; chatId: string | null } | null>(null);
-
-  // LiveKit 连接状态：'connecting'|'connected'|'disconnected'
-  const [livekitStatus, setLivekitStatus] = useState<'connecting'|'connected'|'disconnected'>('disconnected');
-
-  // 监听room 连接状态
-  useEffect(() => {
-    if (!room) return;
-    // 初始状态
-    setLivekitStatus(room.state === 'connected' ? 'connected' : (room.state === 'connecting' ? 'connecting' : 'disconnected'));
-    // room.name 在连接前就可用，是安全的房间标识符
-    console.log(`%c[DEBUG] Attaching listeners to Room (Name: ${room.name})`, 'color: gray; font-style: italic;');
-
-    // --- 1. 房间连接状态事件 ---
-    const handleConnectionStateChange = () => {
-        const state = room.state;
-        console.log(`%c[DEBUG] Room Connection State Changed: %c${state}`, 'color: black;', `color: ${state === 'connected' ? 'green' : 'orange'}; font-weight: bold;`);
-        setLivekitStatus(state === 'connected' ? 'connected' : (state === 'connecting' ? 'connecting' : 'disconnected'));
-        if (state === 'connected') {
-            console.groupCollapsed('%c[DEBUG] Room Connected Details', 'color: green; font-weight: bold;');
-            // ✅ 正确的做法：sid 属于 participant，而不是 room。
-            // 在连接成功后，localParticipant 会被分配一个 sid。
-            console.log('Local Participant SID:', room.localParticipant.sid);
-            console.log('Room Name:', room.name);
-            console.log('Full Room Object:', room);
-            if (room.remoteParticipants.size > 0) {
-                console.log('Remote participants already in room:', Array.from(room.remoteParticipants.values()).map(p => p.identity));
-            } else {
-                console.log('Waiting for remote participant (Agent) to join...');
-            }
-            console.groupEnd();
-        }
-    };
-
-    // --- 2. 远程参与者事件 ---
-    const handleParticipantConnected = (participant: RemoteParticipant) => {
-        console.groupCollapsed(`%c[EVENT] Participant Connected: %c${participant.identity}`, 'color: blue; font-weight: bold;', 'color: black;');
-        console.log('Participant SID:', participant.sid); // participant 对象上确实有 sid
-        console.groupEnd();
-        setLivekitStatus('connected');
-    };
-
-    const handleParticipantDisconnected = (participant: RemoteParticipant) => {
-        console.groupCollapsed(`%c[EVENT] Participant Disconnected: %c${participant.identity}`, 'color: lightcoral; font-weight: bold;', 'color: black;');
-        console.log('Participant SID:', participant.sid);
-        console.groupEnd();
-        setLivekitStatus('disconnected');
-    };
-
-    // --- 3. 远程轨道事件 ---
-    const handleRemoteTrackPublished = (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
-        console.log(`%c[EVENT] Remote Track PUBLISHED by ${participant.identity}: %c${publication.source}`, 'color: purple;', 'font-weight: bold;', `(Kind: ${publication.kind})`);
-    };
-
-    const handleTrackSubscribed = (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
-        console.log(`%c[EVENT] ✅ Track SUBSCRIBED to ${participant.identity}: %c${track.source}`, 'color: #00dd00; font-weight: bold;', 'font-weight: bold;', `(Kind: ${track.kind})`);
-    };
-
-    const handleTrackUnsubscribed = (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
-        console.log(`%c[EVENT] ⚠️ Track UNSUBSCRIBED from ${participant.identity}: %c${track.source}`, 'color: #ff8c00; font-weight: bold;', 'font-weight: bold;', `(Kind: ${track.kind})`);
-    };
-
-    // --- 4. 本地轨道事件 ---
-    const handleLocalTrackPublished = (publication: LocalTrackPublication, participant: LocalParticipant) => {
-        console.log(`%c[EVENT] ✅ My Local Track PUBLISHED: %c${publication.source}`, 'color: teal; font-weight: bold;', 'font-weight: bold;', `(Participant: ${participant.identity}, Kind: ${publication.kind})`);
-    };
-
-    // --- 5. 数据通道事件 ---
-    const handleDataReceived = (payload: Uint8Array, participant?: RemoteParticipant) => {
-      const decoder = new TextDecoder();
-      const messageText = decoder.decode(payload);
-      // 只处理来自远程参与者的数据
-      if (!participant) return;
-
-      try {
-          // 尝试将消息解析为 JSON，这是我们约定的信令格式
-          const data = JSON.parse(messageText);
-
-          if (data.type === 'status') {
-              // 如果是状态消息，就在控制台用更显眼的方式打印出来
-              if (data.status === 'error') {
-                  const errorCode = data.payload?.errorCode;
-                  const errorKey = Object.keys(AI_ERROR_CODES).find(key => AI_ERROR_CODES[key as keyof typeof AI_ERROR_CODES] === errorCode) || "UNKNOWN_CODE";
-
-                  console.groupCollapsed(`%c[AGENT STATUS] ERROR RECEIVED`, 'color: red; font-weight: bold; font-size: 1.1em;');
-                  console.log(`%cError Code:`, 'font-weight: bold;', `${errorCode} (${errorKey})`);
-                  console.log(`%cSource:`, 'font-weight: bold;', data.payload?.source);
-                  console.log(`%cDetailed Message:`, 'font-weight: bold;', data.payload?.message);
-                  console.log(`%cFull Payload:`, 'font-weight: bold;', data.payload);
-                  console.groupEnd();
-              } else {
-                  console.groupCollapsed(`%c[AGENT STATUS] ${data.status.toUpperCase()}`, 'color: #4682B4; font-weight: bold;');
-                  console.log(`%cPayload:`, 'font-weight: bold;', data.payload || 'N/A');
-                  console.groupEnd();
-              }
-          } else if (data.type === 'chat') {
-              // 如果是降级后的文本聊天消息，也打印出来
-              console.groupCollapsed(`%c[AGENT CHAT] TEXT MESSAGE RECEIVED`, 'color: green; font-weight: bold;');
-              console.log(`%cContent:`, 'font-weight: bold;', data.content);
-              console.groupEnd();
-          } else {
-               // 如果是未知的 JSON 格式
-               console.warn(`[AGENT DATA] Received unknown JSON data structure from ${participant.identity}:`, data);
-          }
-      } catch (e) {
-          // 如果收到的不是 JSON，说明是旧的或意外的纯文本数据，比如语音转录
-          // 我们不在这里处理，让 useChatAndTranscription 来处理
-          // console.log(`[AGENT DATA] Received non-JSON data from ${participant.identity}:`, messageText);
-      }
-    };
-
-    // --- 绑定所有监听器 ---
-    room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChange);
-    room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
-    room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-    room.on(RoomEvent.TrackPublished, handleRemoteTrackPublished);
-    room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
-    room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
-    room.on(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
-    room.on(RoomEvent.DataReceived, handleDataReceived);
-    // --- 初始状态检查 ---
-    handleConnectionStateChange();
-
-    // --- 清理函数 ---
-    return () => {
-      console.log(`%c[DEBUG] Cleaning up listeners from Room (Name: ${room.name})`, 'color: gray; font-style: italic;');
-      room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChange);
-      room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
-      room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-      room.off(RoomEvent.TrackPublished, handleRemoteTrackPublished);
-      room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
-      room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
-      room.off(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
-      room.off(RoomEvent.DataReceived, handleDataReceived);
-    };
-  }, [room]);
 
   const { data: session, status } = useSession();
   // 类型断言扩展 user 字段
@@ -620,17 +458,18 @@ export default function MultimodalChatbot() {
 
   // 发送消息
   const sendMessage = async () => {
-    if (livekitStatus !== 'connected') {
+    if (!isReadyToChat) {
       toastAlert({ title: '正在连接服务器，请稍候...', description: '' });
-      console.log(`sendMessage livekitStatus: %c${livekitStatus}`);
-      if (livekitStatus === 'disconnected') connectRoom();
+      console.log(`[sendMessage] Not ready to chat. Attempting to reconnect.`);
+      // 调用智能的 connectRoom 方法，它会处理所有重连逻辑
+      await connectRoom();
       return;
     }
     if ((!inputValue.trim() && !selectedFile) || isWaitingForReply || (selectedFile && (!uploadedFileInfo || isUploading))) return;
     setIsWaitingForReply(true);
 
     // 发送到 livekit
-    if (room && connected && room.state === 'connected') {
+    if (room && isReadyToChat) {
       try {
         await send(inputValue);
       } catch (e) {
@@ -866,9 +705,9 @@ export default function MultimodalChatbot() {
 
   // 语音录制
   const toggleRecording = async () => {
-    if (livekitStatus !== 'connected' && !isRecording) {
+    if (!isReadyToChat && !isRecording) {
       toastAlert({ title: '正在连接服务器，请稍候...', description: '' });
-      if (livekitStatus === 'disconnected') connectRoom();
+      await connectRoom();
       return;
     }
     if (isRecording) {
@@ -1363,13 +1202,13 @@ export default function MultimodalChatbot() {
                   <div>
                     <h1 className="font-semibold">AI助手</h1>
                     <p className="text-sm text-muted-foreground">
-                      {livekitStatus === 'connected' && (
-                        <>
-                          <span className="text-blue-600 font-semibold">在线</span> • 支持文本、语音、文档
-                        </>
-                      )}
-                      {livekitStatus === 'disconnected' && '离线'}
-                      {livekitStatus === 'connecting' && '正在连接'}
+                      {(() => {
+                          if (!isClientConnected) return <span className="text-red-600 font-semibold">离线</span>;
+                          if (!isAgentConnected) return <span className="text-orange-500 font-semibold">正在连接...</span>;
+                          return <>
+                            <span className="text-blue-600 font-semibold">在线</span> • 支持文本、语音、文档
+                          </>;
+                        })()}
                       {user && (
                         <span className="ml-2">
                           • 已登录为 <span className="font-semibold">{user.nickname?.trim() || user.username?.trim() || user.name?.trim() || user.email}</span>
