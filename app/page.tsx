@@ -1225,7 +1225,9 @@ export default function MultimodalChatbot() {
                             }`}
                             onClick={() => selectChat(chat.id)}
                           >
-                            <p className="text-sm truncate pr-10">{chat.title}</p>
+                            <p className="text-sm truncate pr-10">
+                              {(chat.title.length > 15) ? `${chat.title.substring(0, 15)}...` : chat.title}
+                            </p>
                             <div className="absolute right-1 top-1/2 -translate-y-1/2 z-10">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
