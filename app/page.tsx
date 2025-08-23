@@ -63,6 +63,7 @@ import {
   getDocumentFileName,
   saveTempMessageToDB } from '@/lib/db/utils';
 import showdown from 'showdown';
+import { ConnectionError } from 'livekit-client';
 
 interface Message {
   id: string
@@ -118,7 +119,7 @@ export default function MultimodalChatbot() {
   const [showNicknameDialog, setShowNicknameDialog] = useState(false);
   const [newNickname, setNewNickname] = useState("");
 
-  const { room, connectRoom, isReadyToChat, connected: isClientConnected, isAgentConnected } = useLiveKit()
+  const { room, connectRoom, isReadyToChat, connected: isClientConnected, isAgentConnected, forceReconnect } = useLiveKit()
   const { send, messages: livekitMessages } = useChatAndTranscription();
 
   // 记录已插入的转录消息ID，避免重复
@@ -474,6 +475,18 @@ export default function MultimodalChatbot() {
         await send(inputValue);
       } catch (e) {
         console.error("发送到 livekit 失败", e);
+        if (e instanceof ConnectionError && e.message.includes('Publisher connection')) {
+          toastAlert({
+            title: '连接出现问题',
+            description: '检测到数据发送失败，正在尝试自动重连...',
+          });
+          // 调用我们的新函数来强制完全重连
+          await forceReconnect();
+          // 解锁UI
+          setIsWaitingForReply(false);
+          // 停止执行此函数的其余部分
+          return;
+        }
       }
     }
 

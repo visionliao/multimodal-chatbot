@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useMemo, useState, useCallback, useEffect } from 'react';
-import { Room } from 'livekit-client';
+import { Room, ConnectionError } from 'livekit-client';
 import {
   RoomEvent,
   type RemoteParticipant
@@ -28,6 +28,7 @@ type LiveKitContextType = {
   // 聊天就绪状态，只有当本地参与者和远程参与者都连接成功，才能表示聊天状态就绪
   isReadyToChat: boolean;
   connectRoom: () => Promise<void>;
+  forceReconnect: () => Promise<void>;
 };
 
 const LiveKitContext = createContext<LiveKitContextType | undefined>(undefined);
@@ -176,6 +177,45 @@ export function LiveKitProvider({ children }: { children: React.ReactNode }) {
     };
   }, [room, refreshConnectionDetails]);
 
+  // 定义 forceReconnect 函数
+  const forceReconnect = useCallback(async () => {
+    console.log("%c[forceReconnect] 检测到严重错误，正在强制执行完全重连。", 'color: orange; font-weight: bold;');
+
+    // 确保从旧的 room 实例断开连接（如果它还没有断开的话）
+    if (room.state !== 'disconnected') {
+      await room.disconnect();
+    }
+
+    // 核心操作：创建一个新的 Room 实例并更新 state。
+    // 这将触发 useEffect 来建立一个全新的连接。
+    setRoom(new Room());
+
+  }, [room]); // 依赖于当前的 room 实例，以便断开它
+
+  // 全局未处理的 Promise 异常监听器
+  useEffect(() => {
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      // event.reason 中包含了被 reject 的值，通常就是错误对象
+      const error = event.reason;
+      // 执行和 sendMessage 中完全相同的检查
+      if (error instanceof ConnectionError && error.message.includes('Publisher connection')) {
+        console.warn('[Global Handler] 捕获到未处理的 LiveKit 连接错误，将主动触发重连。');
+        // 阻止错误继续在控制台冒泡，避免给用户造成困扰
+        event.preventDefault();
+        // 执行强制重连逻辑
+        forceReconnect();
+      }
+    };
+
+    // 在 window 对象上添加监听器
+    window.addEventListener('unhandledrejection', handleRejection);
+
+    // 【极其重要】组件卸载时，必须移除监听器，以防止内存泄漏
+    return () => {
+      window.removeEventListener('unhandledrejection', handleRejection);
+    };
+  }, [forceReconnect]); // 依赖 forceReconnect，确保它能拿到最新的 room 状态来执行 disconnect
+
   // 计算最终的“就绪状态”
   const isReadyToChat = useMemo(() => connected && isAgentConnected, [connected, isAgentConnected]);
   const value = {
@@ -183,7 +223,8 @@ export function LiveKitProvider({ children }: { children: React.ReactNode }) {
       connected,
       isAgentConnected,
       isReadyToChat, // 暴露这个统一状态
-      connectRoom
+      connectRoom,
+      forceReconnect
   };
 
   return (
