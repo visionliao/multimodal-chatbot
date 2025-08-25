@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect } from "react";
 import { Sparkles } from "lucide-react";
-import { RegisterFormClient } from '@/components/register-form-client';
+import { LoginRootClient } from "@/components/login-root-client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -17,7 +17,7 @@ function HomeIconButton() {
   );
 }
 
-export default function Register() {
+export default function LoginRoot() {
   // 获取会话状态和 router 实例
   const { status } = useSession();
   const router = useRouter();
@@ -38,20 +38,20 @@ export default function Register() {
       </div>
     );
   }
-
+  // 验证通过后，才渲染真实的页面内容
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-gray-50">
       <div className="z-10 w-full max-w-md overflow-hidden rounded-2xl border border-gray-100 shadow-xl">
         <div className="flex flex-col items-center justify-center space-y-3 border-b border-gray-200 bg-white px-4 py-6 pt-8 text-center sm:px-16">
           <div className="flex items-center justify-center w-full gap-2">
             <HomeIconButton />
-            <h3 className="text-xl font-semibold">Sign Up</h3>
+            <h3 className="text-xl font-semibold">Root user</h3>
           </div>
           <p className="text-sm text-gray-500">
-            Create an account with your email and password
+            Log in with superuser credentials
           </p>
         </div>
-        <RegisterFormClient />
+        <LoginRootClient />
       </div>
     </div>
   );

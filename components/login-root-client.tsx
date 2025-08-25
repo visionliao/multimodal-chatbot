@@ -1,34 +1,33 @@
 'use client';
 
-import Link from 'next/link';
-import { Form } from '@/components/login_form';
+import { Form } from '@/components/login_root';
 import { SubmitButton } from '@/components/submit-button';
 import { Toast, useToast } from '@/components/toast';
 import { useRouter } from 'next/navigation';
 import { signIn } from "next-auth/react";
 
-export function LoginFormClient() {
+export function LoginRootClient() {
   const { toast, showToast, hideToast } = useToast();
   const router = useRouter();
 
   const handleLogin = async (formData: FormData, event?: React.FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
-    const email = formData.get('email') as string;
+    const username = formData.get('username') as string;
     const password = formData.get('password') as string;
 
-    const res = await signIn("credentials", {
+    const res = await signIn("root", {
       redirect: false,
-      email,
+      username,
       password,
     });
 
     if (res?.ok) {
       showToast('登录成功！', 'success');
       setTimeout(() => {
-        router.push('/');
+        router.push('/root-dashboard');
       }, 1000);
     } else {
-      showToast('登录失败，账号或密码错误', 'error');
+      showToast('登录失败，用户名或密码错误', 'error');
       if (event?.target) {
         const form = event.target as HTMLFormElement;
         form.reset();
@@ -48,20 +47,6 @@ export function LoginFormClient() {
     action={(formData: FormData, event: React.FormEvent<HTMLFormElement>) => handleLogin(formData, event)}
     >
     <SubmitButton>Sign in</SubmitButton>
-    <p className="text-center text-sm text-gray-600">
-    {"Don't have an account? "}
-    <Link href="/register" className="font-semibold text-gray-800">
-        Sign up
-    </Link>
-    {' for free.'}
-    </p>
-    <p className="text-center text-sm text-gray-600">
-    {"Or log in as a "}
-    <Link href="/root" className="font-semibold text-gray-800">
-        Superuser
-    </Link>
-    {'.'}
-    </p>
     </Form>
     </>
   );

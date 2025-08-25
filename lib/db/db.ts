@@ -212,6 +212,12 @@ async function ensureTablesExist() {
   isInitialized = true;
 }
 
+// 获取root用户
+export async function getRootUser(username: string) {
+  await ensureTablesExist();
+  return await db.select().from(roots).where(eq(roots.username, username));
+}
+
 // 获取用户
 export async function getUser(email: string) {
   await ensureTablesExist();

@@ -128,12 +128,25 @@ export default function MultimodalChatbot() {
   const lastBotMessage = useRef<{ message: string; chatId: string | null } | null>(null);
 
   const { data: session, status } = useSession();
+  const router = useRouter();
   // 类型断言扩展 user 字段
   const user = session && session.user ? (session.user as typeof session.user & { nickname?: string; username?: string; user_id?: number }) : undefined;
 
+  // --- 用于检测 root 用户并重定向 ---
+  useEffect(() => {
+    // 仅在会话状态确定后执行检查
+    if (status === 'authenticated') {
+      // 检查用户角色是否为 'root'
+      if ((session?.user as any)?.role === 'root') {
+        // 如果是 root 用户，重定向到超级用户控制台
+        router.push('/root-dashboard');
+      }
+    }
+  }, [session, status, router]);
+
   // 登录后自动加载聊天记录
   useEffect(() => {
-    if (user && user.user_id) {
+    if (user && user.user_id && (user as any).role !== 'root') {
       //console.log("lhf 触发登录事件")
       getChatsByUserId(user).then(async (chats) => {
         // chats: [{ chat_id, user_id, title, created_at, updated_at }]
@@ -873,8 +886,6 @@ export default function MultimodalChatbot() {
     setTempChat(null);
   }
 
-  const router = useRouter();
-
   // 修改昵称弹窗相关逻辑
   const handleNicknameChange = async () => {
     if (!newNickname.trim()) return;
@@ -1006,6 +1017,16 @@ export default function MultimodalChatbot() {
     tables: true,             // 支持表格
     ghCompatibleHeaderId: true,
   }), []);
+
+  // --- 在 return 之前添加加载和重定向中的状态处理 ---
+  // 这可以防止在重定向发生前短暂显示聊天界面，从而避免UI闪烁
+  if (status === 'loading' || (status === 'authenticated' && (session?.user as any)?.role === 'root')) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center">
+        <p>正在加载用户会话...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background">

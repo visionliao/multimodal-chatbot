@@ -1,7 +1,9 @@
 "use client";
-import React from "react";
+import React, { useEffect } from "react";
 import { Sparkles } from "lucide-react";
 import { LoginFormClient } from "@/components/login-form-client";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 function HomeIconButton() {
   return (
@@ -16,6 +18,18 @@ function HomeIconButton() {
 }
 
 export default function Login() {
+  // 获取会话状态和 router 实例
+  const { status } = useSession();
+  const router = useRouter();
+
+  // 添加副作用钩子用于检查和重定向
+  useEffect(() => {
+    // 如果用户已经被认证，则直接跳转到首页
+    if (status === 'authenticated') {
+      router.push('/');
+    }
+  }, [status, router]); // 依赖项包含 status 和 router
+
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-gray-50">
       <div className="z-10 w-full max-w-md overflow-hidden rounded-2xl border border-gray-100 shadow-xl">

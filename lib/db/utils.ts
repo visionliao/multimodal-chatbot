@@ -214,3 +214,9 @@ export const saveTempMessageToDB = async (
     return null;
   }
 };
+
+
+
+
+/***************** 为root用户增加的方法 *****************/
+
