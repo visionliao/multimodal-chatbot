@@ -231,7 +231,6 @@ export function LiveKitProvider({ children }: { children: React.ReactNode }) {
     <LiveKitContext.Provider value={value}>
       <RoomContext.Provider value={room}>
         <RoomAudioRenderer />
-        <StartAudio label="Start Audio" />
         {children}
       </RoomContext.Provider>
     </LiveKitContext.Provider>
