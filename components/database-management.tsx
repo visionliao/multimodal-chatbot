@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Database, Server, HardDrive, Users, MessageSquare, Image, FileText } from 'lucide-react';
+import { Database, Server, HardDrive, Users, MessageSquare, Image, FileText, Mail, Clock } from 'lucide-react';
 
 interface DatabaseStats {
   summary: {
@@ -11,6 +11,8 @@ interface DatabaseStats {
     totalMessages: number;
     totalPictures: number;
     totalDocuments: number;
+    totalVerificationCodes: number;
+    totalTempMessages: number;
     databaseSize: number;
     databaseSizeFormatted: string;
   };
@@ -18,11 +20,19 @@ interface DatabaseStats {
     schemaname: string;
     tablename: string;
     size: string;
+    rowCount: number;
+    columns: Array<{
+      column_name: string;
+      data_type: string;
+      is_nullable: string;
+      column_default: string;
+      character_maximum_length: number;
+    }>;
   }>;
 }
 
 interface DatabaseManagementProps {
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export function DatabaseManagement({ onBack }: DatabaseManagementProps) {
@@ -152,6 +162,34 @@ export function DatabaseManagement({ onBack }: DatabaseManagementProps) {
             </div>
           </div>
         </div>
+
+        <div className="bg-white border rounded-lg p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <Mail className="h-6 w-6 text-purple-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">验证码</p>
+              <p className="text-2xl font-semibold text-gray-900">
+                {formatNumber(stats.summary.totalVerificationCodes)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border rounded-lg p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-yellow-100 rounded-lg">
+              <Clock className="h-6 w-6 text-yellow-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">临时消息</p>
+              <p className="text-2xl font-semibold text-gray-900">
+                {formatNumber(stats.summary.totalTempMessages)}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 数据库大小信息 */}
@@ -169,45 +207,74 @@ export function DatabaseManagement({ onBack }: DatabaseManagementProps) {
       </div>
 
       {/* 详细表信息 */}
-      <div className="bg-white border rounded-lg">
-        <div className="px-6 py-4 border-b">
-          <div className="flex items-center">
-            <Server className="h-5 w-5 text-gray-400 mr-2" />
-            <h3 className="text-lg font-medium text-gray-900">数据表详情</h3>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  表名
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  模式
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  大小
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {stats.tables.map((table, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {table.tablename}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+      <div className="space-y-6">
+        {stats.tables.map((table, index) => (
+          <div key={index} className="bg-white border rounded-lg">
+            <div className="px-6 py-4 border-b">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center">
+                  <Server className="h-5 w-5 text-gray-400 mr-2" />
+                  <h3 className="text-lg font-medium text-gray-900">{table.tablename}</h3>
+                  <span className="ml-2 px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
                     {table.schemaname}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {table.size}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </span>
+                </div>
+                <div className="flex items-center space-x-4 text-sm text-gray-600">
+                  <span>记录数: {formatNumber(table.rowCount)}</span>
+                  <span>大小: {table.size}</span>
+                </div>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      字段名
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      数据类型
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      可空
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      默认值
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      最大长度
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {table.columns.map((column, colIndex) => (
+                    <tr key={colIndex} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {column.column_name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {column.data_type}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {column.is_nullable === 'YES' ? (
+                          <span className="text-green-600">是</span>
+                        ) : (
+                          <span className="text-red-600">否</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {column.column_default || '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {column.character_maximum_length || '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
