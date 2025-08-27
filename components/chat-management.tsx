@@ -87,7 +87,7 @@ export function ChatManagement({ onBack }: ChatManagementProps) {
     <div className="p-8">
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">聊天管理</h2>
-        <p className="text-gray-600">管理系统中所有用户的聊天记录</p>
+        <p className="text-gray-600">管理系统中聊天记录</p>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">

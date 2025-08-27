@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useSession, signOut } from "next-auth/react";
 import { UserManagement } from "@/components/user-management";
 import { DatabaseManagement } from "@/components/database-management";
-import { ChatManagement } from "@/components/chat-management";
+import { ChatManagement } from "@/components/chat-management-new";
 
 function HomeIconButton({ onClick }: { onClick?: () => void }) {
   return (
