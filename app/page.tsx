@@ -636,6 +636,10 @@ export default function MultimodalChatbot() {
     setUploadedFileInfo(null);
     setIsUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    // 重置textarea高度
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
 
     setTimeout(() => {
       inputRef.current?.focus();
@@ -845,6 +849,11 @@ export default function MultimodalChatbot() {
     setTempChat(newTempChat);
     setCurrentChatId(null);
     setInputValue(presetQuestion || "");
+    // 重置textarea高度
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
+
     setTimeout(() => {
       inputRef.current?.focus();
       if (presetQuestion) {
@@ -1390,12 +1399,17 @@ export default function MultimodalChatbot() {
                     </Button>
 
                     <div className="flex-1 relative">
-                      <Input
+                      <textarea
                         ref={inputRef}
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
+                        onInput={(e) => {
+                          const target = e.target as HTMLTextAreaElement;
+                          target.style.height = 'auto';
+                          target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+                        }}
                         placeholder={
-                          isWaitingForReply ? "等待AI回复中..." : isRecording ? "正在语音对话中..." : "输入消息..."
+                          isWaitingForReply ? "等待AI回复中..." : isRecording ? "正在语音对话中..." : "输入消息...（Shift+Enter换行）"
                         }
                         onKeyDown={(e) => {
                           if (
@@ -1409,8 +1423,9 @@ export default function MultimodalChatbot() {
                             sendMessage();
                           }
                         }}
-                        className="pr-12"
+                        className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 pr-12 min-h-[40px] max-h-[120px]"
                         disabled={Boolean(isWaitingForReply || isRecording || isUploading || (selectedFile && !uploadedFileInfo))}
+                        rows={1}
                       />
                       <Button
                         size="icon"
@@ -1418,9 +1433,9 @@ export default function MultimodalChatbot() {
                           if (!isWaitingForReply && !isRecording && inputValue.trim()) sendMessage();
                         }}
                         disabled={!inputValue.trim() || isWaitingForReply || isRecording || isUploading || Boolean(selectedFile && !uploadedFileInfo)}
-                        className="absolute right-1 top-1 h-8 w-8"
+                        className="absolute right-2 bottom-2 h-7 w-7"
                       >
-                        <Send className="h-4 w-4" />
+                        <Send className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
