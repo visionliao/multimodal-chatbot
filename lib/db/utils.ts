@@ -220,3 +220,47 @@ export const saveTempMessageToDB = async (
 
 /***************** 为root用户增加的方法 *****************/
 
+// 获取所有用户列表（包括超级用户和普通用户）
+export const getAllUsers = async () => {
+  try {
+    const res = await fetch('/api/admin/users', { method: 'GET' });
+    const data = await res.json();
+
+    return {
+      normalUsers: data.users || [],
+      rootUsers: data.roots || []
+    };
+  } catch (error) {
+    console.error('获取用户列表失败', error);
+    return { normalUsers: [], rootUsers: [] };
+  }
+};
+
+// 获取用户聊天统计信息
+export const getUserChatStats = async (userId: number) => {
+  try {
+    const res = await fetch(`/api/admin/user-stats/${userId}`, { method: 'GET' });
+    const data = await res.json();
+    return data.stats || { chatCount: 0, messageCount: 0 };
+  } catch (error) {
+    console.error('获取用户统计信息失败', error);
+    return { chatCount: 0, messageCount: 0 };
+  }
+};
+
+// 删除用户
+export const deleteUser = async (userId: number, userType: 'normal' | 'root') => {
+  try {
+    const res = await fetch('/api/admin/users', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, userType }),
+    });
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    console.error('删除用户失败', error);
+    return { success: false, error };
+  }
+};
+
