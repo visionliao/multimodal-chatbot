@@ -3,27 +3,33 @@
 import { MessageCircle, FileText, Mic, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { useState } from "react"
 
 interface WelcomeScreenProps {
   onStartChat: (presetQuestion?: string) => void
 }
 
 export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
+  const [selectedFeature, setSelectedFeature] = useState(0) // 默认选择Customer Service (索引0)
+
   const features = [
     {
       icon: <MessageCircle className="h-5 w-5" />,
-      title: "智能对话",
-      description: "与AI助手进行自然流畅的对话交流",
+      title: "Customer Service",
+      description: "客户服务",
+      defaultMessage: "你好，我是客户",
     },
     {
       icon: <FileText className="h-5 w-5" />,
-      title: "文档分析",
-      description: "上传文档，让AI帮您快速理解和分析内容",
+      title: "Operations",
+      description: "运营管理",
+      defaultMessage: "你好，我是运营团队",
     },
     {
       icon: <Mic className="h-5 w-5" />,
-      title: "语音交互",
-      description: "支持语音输入，让交流更加便捷自然",
+      title: "Asset Management",
+      description: "资管团队",
+      defaultMessage: "你好，我是资管团队",
     },
   ]
 
@@ -33,6 +39,20 @@ export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
     "公寓周边的交通便利吗？",
     "入住需要什么手续？",
   ]
+
+  const handleStartChat = () => {
+    const selectedMessage = features[selectedFeature].defaultMessage
+    onStartChat(selectedMessage)
+  }
+
+  const handleFeatureClick = (index: number) => {
+    setSelectedFeature(index)
+  }
+
+  const handleFeatureDoubleClick = (index: number) => {
+    const selectedMessage = features[index].defaultMessage
+    onStartChat(selectedMessage)
+  }
 
   return (
     <div className="flex-1 flex items-center justify-center p-8">
@@ -53,9 +73,22 @@ export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
 
         <div className="grid md:grid-cols-3 gap-4">
           {features.map((feature, index) => (
-            <Card key={index} className="border-2 hover:border-primary/50 transition-colors cursor-pointer group">
+            <Card 
+              key={index} 
+              className={`border-2 transition-colors cursor-pointer group ${
+                selectedFeature === index 
+                  ? 'border-primary bg-primary/5' 
+                  : 'hover:border-primary/50'
+              }`}
+              onClick={() => handleFeatureClick(index)}
+              onDoubleClick={() => handleFeatureDoubleClick(index)}
+            >
               <CardContent className="p-6 text-center space-y-3">
-                <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
+                  selectedFeature === index
+                    ? 'bg-primary/20'
+                    : 'bg-primary/10 group-hover:bg-primary/20'
+                }`}>
                   {feature.icon}
                 </div>
                 <h3 className="font-semibold text-foreground">{feature.title}</h3>
@@ -67,7 +100,7 @@ export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
 
         <div className="space-y-4">
           <Button
-            onClick={() => onStartChat()}
+            onClick={handleStartChat}
             size="lg"
             className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-8 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200"
           >
