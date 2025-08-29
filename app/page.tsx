@@ -69,7 +69,7 @@ interface Message {
   id: string
   content: string
   sender: "user" | "bot"
-  timestamp: Date
+  timestamp: Date | string
   // 0: text, 1: image, 2: txt, 3: pdf, 4: doc, 5: unknown
   type: number
   fileName?: string
@@ -172,7 +172,7 @@ export default function MultimodalChatbot() {
                 sender: m.message_source === 0 ? "user" : "bot",
                 type: m.type,
                 fileName: fileName || undefined,
-                timestamp: m.created_at ? new Date(m.created_at) : new Date(),
+                timestamp: m.created_at,
               };
             }));
             return {
@@ -784,12 +784,29 @@ export default function MultimodalChatbot() {
   };
 
   // 格式化时间
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString("zh-CN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  }
+  const formatTime = (date: Date | string) => {
+    // 情况一：处理从数据库来的、带有错误 'Z' 标签的字符串
+    if (typeof date === 'string') {
+      // 字符串格式: "2025-08-29T15:29:56.193Z"
+      // 我们通过 'T' 分割，直接提取时间部分，忽略 'Z'
+      const timePart = date.split('T')[1];
+      if (timePart) {
+        // 截取前8个字符 "HH:mm:ss"
+        return timePart.substring(0, 8);
+      }
+    }
+
+    // 情况二：处理用户刚发送的新消息 (这是一个正确的 Date 对象)
+    if (date instanceof Date) {
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${hours}:${minutes}:${seconds}`;
+    }
+
+    // 兜底
+    return "00:00:00";
+  };
 
   // 时间分组
   const getTimeGroup = (date: Date) => {

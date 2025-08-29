@@ -197,16 +197,25 @@ export function ChatManagement({ onBack }: ChatManagementProps) {
     return date.toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
+      timeZone: 'UTC',
     });
   };
 
   const formatTime = (dateString: string) => {
+    //const date = new Date(dateString);
+    //return date.toLocaleTimeString('zh-CN', {
+    //  hour: '2-digit',
+    //  minute: '2-digit'
+    //});
+    console.log('Value:', dateString);
     const date = new Date(dateString);
-    return date.toLocaleTimeString('zh-CN', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    console.log('Date:', date);
+
+    const hours = String(date.getUTCHours());
+    const minutes = String(date.getUTCMinutes());
+    const seconds = String(date.getUTCSeconds());
+    return `${hours}:${minutes}:${seconds}`;
   };
 
   if (loading) {
