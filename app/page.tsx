@@ -110,7 +110,7 @@ export default function MultimodalChatbot() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null) // 用于自动滚动到底部
-  const inputRef = useRef<HTMLInputElement>(null) // 用于自动获取焦点
+  const inputRef = useRef<HTMLTextAreaElement>(null) // 用于自动获取焦点
 
   // 增加临时对话 tempChat 状态
   const [tempChat, setTempChat] = useState<Chat | null>(null);
