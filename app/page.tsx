@@ -1282,51 +1282,83 @@ export default function MultimodalChatbot() {
               {/* 消息区域 */}
               <ScrollArea className="flex-1 p-4">
                 <div className="space-y-4 max-w-4xl mx-auto">
-                  {currentChat.messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex items-start space-x-3 ${
-                        message.sender === "user" ? "flex-row-reverse space-x-reverse" : ""
-                      }`}
-                    >
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback>
-                          {message.sender === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                        </AvatarFallback>
-                      </Avatar>
+                  {/* --- 带日期分组的渲染逻辑 --- */}
+                  {currentChat.messages.reduce<React.ReactNode[]>((acc, message, index) => {
+                    const lastMessage = index > 0 ? currentChat.messages[index - 1] : null;
 
-                      <div className={`flex flex-col space-y-1 max-w-[70%]`}>
-                        <div
-                          className={`rounded-lg px-4 py-2 ${
-                            message.sender === "user" ? "bg-primary text-primary-foreground ml-auto" : "bg-muted"
-                          }`}
-                        >
-                          {message.type !== 0 && (
-                            <div className="flex items-center space-x-2 mb-1">
-                              {renderFileIconByType(message.type)}
-                              <span className="text-sm font-medium max-w-[160px] truncate inline-block align-middle">
-                                {message.fileName}
-                              </span>
-                            </div>
-                          )}
-                          {message.sender === 'bot' ? (
-                            <div
-                              dangerouslySetInnerHTML={{ __html: converter.makeHtml(message.content) }}
-                            />
-                          ) : (
-                            <div className="whitespace-pre-line">{message.content}</div>
-                          )}
+                    // 辅助函数：从 Date 或 string 中获取 YYYY-MM-DD 格式的日期
+                    const getMessageDate = (timestamp: Date | string) => {
+                      // 使用 toISOString().split('T')[0] 来安全地获取日期，避免时区问题
+                      return new Date(timestamp).toISOString().split('T')[0];
+                    };
+
+                    const currentDate = getMessageDate(message.timestamp);
+                    const lastDate = lastMessage ? getMessageDate(lastMessage.timestamp) : null;
+
+                    // 如果是第一条消息，或者当前消息的日期与上一条不同，则插入日期分隔符
+                    if (currentDate !== lastDate) {
+                      acc.push(
+                        <div key={`date-${currentDate}`} className="flex justify-center items-center my-4">
+                          <span className="bg-muted px-3 py-1 rounded-full text-xs text-muted-foreground">
+                            {new Date(currentDate).toLocaleDateString('zh-CN', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              timeZone: 'UTC' // 强制使用UTC，确保日期不会因用户时区而偏移一天
+                            })}
+                          </span>
                         </div>
-                        <span
-                          className={`text-xs text-muted-foreground ${
-                            message.sender === "user" ? "text-right" : "text-left"
-                          }`}
-                        >
-                          {formatTime(message.timestamp)}
-                        </span>
+                      );
+                    }
+
+                    // --- 渲染消息气泡 ---
+                    acc.push(
+                      <div
+                        key={message.id}
+                        className={`flex items-start space-x-3 ${
+                          message.sender === "user" ? "flex-row-reverse space-x-reverse" : ""
+                        }`}
+                      >
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback>
+                            {message.sender === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                          </AvatarFallback>
+                        </Avatar>
+
+                        <div className={`flex flex-col space-y-1 max-w-[70%]`}>
+                          <div
+                            className={`rounded-lg px-4 py-2 ${
+                              message.sender === "user" ? "bg-primary text-primary-foreground ml-auto" : "bg-muted"
+                            }`}
+                          >
+                            {message.type !== 0 && (
+                              <div className="flex items-center space-x-2 mb-1">
+                                {renderFileIconByType(message.type)}
+                                <span className="text-sm font-medium max-w-[160px] truncate inline-block align-middle">
+                                  {message.fileName}
+                                </span>
+                              </div>
+                            )}
+                            {message.sender === 'bot' ? (
+                              <div
+                                dangerouslySetInnerHTML={{ __html: converter.makeHtml(message.content) }}
+                              />
+                            ) : (
+                              <div className="whitespace-pre-line">{message.content}</div>
+                            )}
+                          </div>
+                          <span
+                            className={`text-xs text-muted-foreground ${
+                              message.sender === "user" ? "text-right" : "text-left"
+                            }`}
+                          >
+                            {formatTime(message.timestamp)}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                    return acc;
+                  }, [])}
                   {/* AI思考中loading气泡 */}
                   {isWaitingForReply && (
                     <div className="flex items-start space-x-3">
