@@ -262,7 +262,7 @@ export default function MultimodalChatbot() {
             newMessages[newMessages.length - 1] = {
               ...lastMsg,
               content: botStream.message,
-              timestamp: new Date(),
+              //timestamp: new Date(),
             };
             return { ...chat, messages: newMessages };
           } else {
@@ -1288,8 +1288,22 @@ export default function MultimodalChatbot() {
 
                     // 辅助函数：从 Date 或 string 中获取 YYYY-MM-DD 格式的日期
                     const getMessageDate = (timestamp: Date | string) => {
-                      // 使用 toISOString().split('T')[0] 来安全地获取日期，避免时区问题
-                      return new Date(timestamp).toISOString().split('T')[0];
+                      console.log("Processing timestamp:", timestamp, "| Type:", typeof timestamp);
+                      // 情况一：处理新发送的消息 (Date 对象)
+                      if (timestamp instanceof Date) {
+                        const year = timestamp.getFullYear();
+                        const month = String(timestamp.getMonth() + 1).padStart(2, '0');
+                        const day = String(timestamp.getDate()).padStart(2, '0');
+                        return `${year}-${month}-${day}`;
+                      }
+                      // 情况二：处理历史消息 (字符串)
+                      if (typeof timestamp === 'string' && timestamp.includes('T')) {
+                        // 直接从 "2025-08-29T10:52:19.xxxZ" 中截取 "2025-08-29"
+                        // 这是最可靠的方法，完全避免了时区转换问题。
+                        return timestamp.split('T')[0];
+                      }
+                      // 兜底逻辑
+                      return new Date().toISOString().split('T')[0];
                     };
 
                     const currentDate = getMessageDate(message.timestamp);
