@@ -1288,7 +1288,7 @@ export default function MultimodalChatbot() {
 
                     // 辅助函数：从 Date 或 string 中获取 YYYY-MM-DD 格式的日期
                     const getMessageDate = (timestamp: Date | string) => {
-                      console.log("Processing timestamp:", timestamp, "| Type:", typeof timestamp);
+                      // console.log("Processing timestamp:", timestamp, "| Type:", typeof timestamp);
                       // 情况一：处理新发送的消息 (Date 对象)
                       if (timestamp instanceof Date) {
                         const year = timestamp.getFullYear();
