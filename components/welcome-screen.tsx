@@ -55,8 +55,17 @@ export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
-      <div className="max-w-2xl mx-auto text-center space-y-8">
+    <div className="flex-1 flex items-center justify-center p-8 relative">
+      {/* 背景图片 */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: "url('/background.jpg')",
+          filter: "brightness(0.3)"
+        }}
+      />
+
+      <div className="max-w-2xl mx-auto text-center space-y-8 relative z-10">
         <div className="space-y-4">
           <div className="relative mx-auto w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
             <Sparkles className="h-10 w-10 text-white" />
@@ -66,19 +75,19 @@ export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
           </div>
 
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-foreground">Hi，我是您的 Spark AI 助手</h1>
-            <p className="text-lg text-muted-foreground">有任何关于 Spark 公寓的问题都可以咨询我</p>
+            <h1 className="text-3xl font-bold text-white">Hi，我是您的 Spark AI 助手</h1>
+            <p className="text-lg text-gray-200">有任何关于 Spark 公寓的问题都可以咨询我</p>
           </div>
         </div>
 
         <div className="grid md:grid-cols-3 gap-4">
           {features.map((feature, index) => (
             <Card 
-              key={index} 
-              className={`border-2 transition-colors cursor-pointer group ${
+              key={index}
+              className={`border transition-colors cursor-pointer group backdrop-blur-sm ${
                 selectedFeature === index 
-                  ? 'border-primary bg-primary/5' 
-                  : 'hover:border-primary/50'
+                  ? 'border-primary bg-white/10' // 选中时：使用更亮的半透明背景
+                  : 'border-transparent hover:border-primary/50 bg-black/20' // 默认：使用半透明深色背景
               }`}
               onClick={() => handleFeatureClick(index)}
               onDoubleClick={() => handleFeatureDoubleClick(index)}
@@ -86,13 +95,13 @@ export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
               <CardContent className="p-6 text-center space-y-3">
                 <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
                   selectedFeature === index
-                    ? 'bg-primary/20'
-                    : 'bg-primary/10 group-hover:bg-primary/20'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-black/20 group-hover:bg-black/40 text-white'
                 }`}>
                   {feature.icon}
                 </div>
-                <h3 className="font-semibold text-foreground">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
+                <h3 className="font-semibold text-gray-50">{feature.title}</h3>
+                <p className="text-sm text-gray-300">{feature.description}</p>
               </CardContent>
             </Card>
           ))}
@@ -108,18 +117,18 @@ export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
             开始对话
           </Button>
 
-          <p className="text-sm text-muted-foreground">您可以通过文字、语音或上传文档的方式与我交流</p>
+          <p className="text-sm text-gray-200">您可以通过文字、语音或上传文档的方式与我交流</p>
         </div>
 
         <div className="space-y-3">
-          <p className="text-sm font-medium text-muted-foreground">您可以这样问我：</p>
+          <p className="text-sm font-medium text-gray-200">您可以这样问我：</p>
           <div className="flex flex-wrap gap-2 justify-center">
             {presetQuestions.map((question, index) => (
               <Button
                 key={index}
                 variant="outline"
                 size="sm"
-                className="text-xs hover:bg-primary/10 hover:border-primary/50 bg-transparent transition-all duration-200 hover:scale-105"
+                className="text-xs hover:bg-primary/10 hover:border-white/50 bg-transparent text-gray-200 border-gray-400 transition-all duration-200 hover:scale-105"
                 onClick={() => onStartChat(question)}
               >
                 {question}
