@@ -110,7 +110,18 @@ export const translations = {
       },
       message: {
         timeoutError: "Sorry, the response timed out, please try again later."
-      }
+      },
+      alerts: {
+        renameFailed: "Rename failed",
+        deleteFailed: "Delete failed",
+        nicknameUpdateFailed: "Nickname update failed"
+      },
+      defaults: {
+        newChatTitle: "New Chat",
+        devicePermissionCheck: "Please check device permissions"
+      },
+      aiGreeting: "Hello! I'm your Spark AI Assistant. Feel free to ask me any questions about Spark Apartments.",
+      loading: "Loading user session..."
     }
   },
   zh: {
@@ -218,7 +229,18 @@ export const translations = {
       },
       message: {
         timeoutError: "抱歉，回复超时了，请稍后重试。"
-      }
+      },
+      alerts: {
+        renameFailed: "重命名失败",
+        deleteFailed: "删除失败",
+        nicknameUpdateFailed: "昵称修改失败"
+      },
+      defaults: {
+        newChatTitle: "新对话",
+        devicePermissionCheck: "请检查设备权限"
+      },
+      aiGreeting: "您好！我是您的Spark AI助手，有任何关于Spark公寓的问题都可以咨询我。",
+      loading: "正在加载用户会话..."
     }
   }
 }

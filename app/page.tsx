@@ -327,7 +327,7 @@ export default function MultimodalChatbot() {
           const firstMessageTitle = msg.message.trim().slice(0, 30);
           const mergedChat: Chat = {
             ...tempChat,
-            title: firstMessageTitle || "新对话",
+            title: firstMessageTitle || t.chat.defaults.newChatTitle,
             messages: [...tempChat.messages, {
               id: msg.id,
               content: msg.message,
@@ -346,7 +346,7 @@ export default function MultimodalChatbot() {
           const newChatId = `chat_${Date.now()}`;
           const newChat: Chat = {
             id: newChatId,
-            title: firstMessageTitle || '新对话',
+            title: firstMessageTitle || t.chat.defaults.newChatTitle,
             messages: [{
               id: msg.id,
               content: msg.message,
@@ -544,7 +544,7 @@ export default function MultimodalChatbot() {
       const firstMessageTitle = inputValue.trim().slice(0, 30);
       const mergedChat: Chat = {
         ...tempChat,
-        title: firstMessageTitle || "新对话",
+        title: firstMessageTitle || t.chat.defaults.newChatTitle,
         messages: [...tempChat.messages, newMessage],
         lastMessage: inputValue,
         timestamp: new Date(),
@@ -577,7 +577,7 @@ export default function MultimodalChatbot() {
       const newChatId = `chat_${Date.now()}`;
       const newChat: Chat = {
         id: newChatId,
-        title: firstMessageTitle || "新对话",
+        title: firstMessageTitle || t.chat.defaults.newChatTitle,
         messages: [newMessage],
         lastMessage: inputValue,
         timestamp: new Date(),
@@ -697,7 +697,7 @@ export default function MultimodalChatbot() {
       setNewTitle("");
       setSelectedChatId("");
     } else {
-      alert("重命名失败");
+      alert(t.chat.alerts.renameFailed);
     }
   }
 
@@ -731,7 +731,7 @@ export default function MultimodalChatbot() {
       setShowDeleteDialog(false);
       setSelectedChatId("");
     } else {
-      alert("删除失败");
+      alert(t.chat.alerts.deleteFailed);
     }
   }
 
@@ -753,7 +753,7 @@ export default function MultimodalChatbot() {
         console.error('lhf 关闭麦克风失败', error);
         toastAlert({
           title: t.chat.voice.micCloseFailed,
-          description: error instanceof Error && error.message ? error.message : String(error) || "请检查设备权限",
+          description: error instanceof Error && error.message ? error.message : String(error) || t.chat.defaults.devicePermissionCheck,
         });
       }
     } else {
@@ -779,7 +779,7 @@ export default function MultimodalChatbot() {
         console.error('lhf 麦克风授权失败', error);
         toastAlert({
           title: t.chat.voice.micAuthFailed,
-          description: error instanceof Error && error.message ? error.message : String(error) || "请检查设备权限",
+          description: error instanceof Error && error.message ? error.message : String(error) || t.chat.defaults.devicePermissionCheck,
         });
       }
     }
@@ -853,14 +853,14 @@ export default function MultimodalChatbot() {
     const newChatId = `chat_${Date.now()}`;
     const welcomeMsg: Message = {
       id: `msg_${Date.now()}`,
-      content: "您好！我是您的Spark AI助手，有任何关于Spark公寓的问题都可以咨询我。",
+      content: t.chat.aiGreeting,
       sender: "bot",
       timestamp: new Date(),
       type: 0,
     };
     const newTempChat: Chat = {
       id: newChatId,
-      title: "新对话",
+      title: t.chat.defaults.newChatTitle,
       messages: [welcomeMsg],
       lastMessage: "",
       timestamp: new Date(),
@@ -930,7 +930,7 @@ export default function MultimodalChatbot() {
       setShowNicknameDialog(false);
       setNewNickname("");
     } else {
-      alert("昵称修改失败");
+      alert(t.chat.alerts.nicknameUpdateFailed);
     }
   };
 
@@ -1051,7 +1051,7 @@ export default function MultimodalChatbot() {
   if (status === 'loading' || (status === 'authenticated' && (session?.user as any)?.role === 'root')) {
     return (
       <div className="flex h-screen w-screen items-center justify-center">
-        <p>正在加载用户会话...</p>
+        <p>{t.chat.loading}</p>
       </div>
     );
   }
