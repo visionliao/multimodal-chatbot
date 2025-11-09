@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Trash2, User, MessageSquare } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useLanguage } from '@/lib/contexts/language-context';
 
 interface User {
   id: string;
@@ -39,6 +40,7 @@ interface ChatManagementProps {
 }
 
 export function ChatManagement({ onBack }: ChatManagementProps) {
+  const { locale } = useLanguage();
   const [users, setUsers] = useState<User[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -194,7 +196,7 @@ export function ChatManagement({ onBack }: ChatManagementProps) {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('zh-CN', {
+    return date.toLocaleDateString(locale, {
       year: 'numeric',
       month: 'long',
       day: 'numeric',

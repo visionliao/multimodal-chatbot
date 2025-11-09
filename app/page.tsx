@@ -86,7 +86,7 @@ interface Chat {
 
 export default function MultimodalChatbot() {
   const isMobile = useIsMobile();
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   // 基础状态 - 默认没有聊天记录
   // 聊天主逻辑
   const [chats, setChats] = useState<Chat[]>([])
@@ -475,7 +475,7 @@ export default function MultimodalChatbot() {
   // 发送消息
   const sendMessage = async () => {
     if (!isReadyToChat) {
-      toastAlert({ title: '正在连接服务器，请稍候...', description: '' });
+      toastAlert({ title: t.chat.voice.notReadyToChat, description: '' });
       console.log(`[sendMessage] Not ready to chat. Attempting to reconnect.`);
       // 调用智能的 connectRoom 方法，它会处理所有重连逻辑
       await connectRoom();
@@ -492,8 +492,8 @@ export default function MultimodalChatbot() {
         console.error("发送到 livekit 失败", e);
         if (e instanceof ConnectionError && e.message.includes('Publisher connection')) {
           toastAlert({
-            title: '连接出现问题',
-            description: '检测到数据发送失败，正在尝试自动重连...',
+            title: t.chat.voice.connectingError,
+            description: t.chat.voice.connectingError,
           });
           // 调用我们的新函数来强制完全重连
           await forceReconnect();
@@ -652,7 +652,7 @@ export default function MultimodalChatbot() {
       if (isWaitingForReply) {
         const errorReply: Message = {
           id: `msg_${Date.now() + 2}`,
-          content: "抱歉，回复超时了，请稍后重试。",
+          content: t.chat.message.timeoutError,
           sender: "bot",
           timestamp: new Date(),
           type: 0,
@@ -738,7 +738,7 @@ export default function MultimodalChatbot() {
   // 语音录制
   const toggleRecording = async () => {
     if (!isReadyToChat && !isRecording) {
-      toastAlert({ title: '正在连接服务器，请稍候...', description: '' });
+      toastAlert({ title: t.chat.voice.notReadyToChat, description: '' });
       await connectRoom();
       return;
     }
@@ -752,7 +752,7 @@ export default function MultimodalChatbot() {
       } catch (error) {
         console.error('lhf 关闭麦克风失败', error);
         toastAlert({
-          title: "关闭麦克风失败",
+          title: t.chat.voice.micCloseFailed,
           description: error instanceof Error && error.message ? error.message : String(error) || "请检查设备权限",
         });
       }
@@ -764,8 +764,8 @@ export default function MultimodalChatbot() {
       console.log('lhf 检测结果 hasMic:', hasMic, devices);
       if (!hasMic) {
         toastAlert({
-          title: "未检测到麦克风",
-          description: "请插入麦克风设备后重试",
+          title: t.chat.voice.micNotFound,
+          description: t.chat.voice.micNotFound,
         });
         return;
       }
@@ -778,7 +778,7 @@ export default function MultimodalChatbot() {
       } catch (error) {
         console.error('lhf 麦克风授权失败', error);
         toastAlert({
-          title: "麦克风授权失败",
+          title: t.chat.voice.micAuthFailed,
           description: error instanceof Error && error.message ? error.message : String(error) || "请检查设备权限",
         });
       }
@@ -978,7 +978,7 @@ export default function MultimodalChatbot() {
     if (!file || isWaitingForReply || isUploading) return;
 
     if (file.size > 10 * 1024 * 1024) { // 10MB 限制
-      toastAlert({ title: '文件大小超出限制', description: '请选择不超过 10MB 的文件' });
+      toastAlert({ title: t.chat.fileUpload.sizeLimit, description: t.chat.fileUpload.sizeLimitDesc });
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
@@ -1015,14 +1015,14 @@ export default function MultimodalChatbot() {
       } else {
         // 如果服务器返回错误
         const error = await response.json().catch(() => ({ error: response.statusText }));
-        toastAlert({ title: '文件上传失败', description: error.error || '服务器返回错误' });
+        toastAlert({ title: t.chat.fileUpload.uploadFailed, description: error.error || t.chat.fileUpload.uploadFailedDesc });
         setSelectedFile(null); // 清理状态
         setUploadedFileInfo(null);
       }
     } catch (error) {
       // 如果发生网络错误等
       setIsUploading(false);
-      toastAlert({ title: '文件上传失败', description: '网络连接错误' });
+      toastAlert({ title: t.chat.fileUpload.uploadFailed, description: t.chat.fileUpload.networkError });
       setSelectedFile(null);
       setUploadedFileInfo(null);
     } finally {
@@ -1254,7 +1254,7 @@ export default function MultimodalChatbot() {
                   <div
                     className="relative w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg cursor-pointer hover:shadow-xl transition-all duration-200 hover:scale-105"
                     onClick={backToWelcome}
-                    title="回到欢迎界面"
+                    title={t.chat.header.backToWelcome}
                   >
                     <Sparkles className="h-5 w-5 text-white" />
                     <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border border-white flex items-center justify-center">
@@ -1262,18 +1262,18 @@ export default function MultimodalChatbot() {
                     </div>
                   </div>
                   <div>
-                    <h1 className="font-semibold">AI助手</h1>
+                    <h1 className="font-semibold">{t.chat.header.aiAssistant}</h1>
                     <p className="text-sm text-muted-foreground">
                       {(() => {
-                          if (!isClientConnected) return <span className="text-red-600 font-semibold">离线</span>;
-                          if (!isAgentConnected) return <span className="text-orange-500 font-semibold">正在连接...</span>;
+                          if (!isClientConnected) return <span className="text-red-600 font-semibold">{t.chat.header.status.offline}</span>;
+                          if (!isAgentConnected) return <span className="text-orange-500 font-semibold">{t.chat.header.status.connecting}</span>;
                           return <>
-                            <span className="text-blue-600 font-semibold">在线</span> • 支持文本、语音、文档
+                            <span className="text-blue-600 font-semibold">{t.chat.header.status.online}</span> • {t.chat.header.status.features}
                           </>;
                         })()}
                       {user && (
                         <span className="ml-2">
-                          • 已登录为 <span className="font-semibold">{user.nickname?.trim() || user.username?.trim() || user.name?.trim() || user.email}</span>
+                          • {t.chat.header.loggedInAs} <span className="font-semibold">{user.nickname?.trim() || user.username?.trim() || user.name?.trim() || user.email}</span>
                         </span>
                       )}
                     </p>
@@ -1316,7 +1316,7 @@ export default function MultimodalChatbot() {
                       acc.push(
                         <div key={`date-${currentDate}`} className="flex justify-center items-center my-4">
                           <span className="bg-muted px-3 py-1 rounded-full text-xs text-muted-foreground">
-                            {new Date(currentDate).toLocaleDateString('zh-CN', {
+                            {new Date(currentDate).toLocaleDateString(locale, {
                               year: 'numeric',
                               month: 'long',
                               day: 'numeric',
@@ -1385,7 +1385,7 @@ export default function MultimodalChatbot() {
                       </Avatar>
                       <div className="flex flex-col space-y-1 max-w-[70%]">
                         <div className="rounded-lg px-4 py-2 bg-muted animate-pulse">
-                          <span className="text-sm text-muted-foreground">AI正在思考...</span>
+                          <span className="text-sm text-muted-foreground">{t.chat.voice.thinking}</span>
                         </div>
                       </div>
                     </div>
@@ -1426,7 +1426,7 @@ export default function MultimodalChatbot() {
                       <button
                         className="absolute -top-2 -right-2 bg-white rounded-full border shadow p-0.5 hover:bg-red-100 disabled:opacity-50"
                         onClick={() => setSelectedFile(null)}
-                        title="取消"
+                        title={t.chat.fileUpload.cancel}
                         type="button"
                         disabled={isUploading}
                       >
@@ -1438,7 +1438,7 @@ export default function MultimodalChatbot() {
                   {isRecording && (
                     <div className="mb-2 text-center">
                       <span className="text-sm text-muted-foreground animate-pulse">
-                        🔴 正在语音对话...点击停止按钮结束本次语音对话
+                        {t.chat.voice.recordingHint}
                       </span>
                     </div>
                   )}
@@ -1474,7 +1474,7 @@ export default function MultimodalChatbot() {
                           target.style.height = Math.min(target.scrollHeight, 120) + 'px';
                         }}
                         placeholder={
-                          isWaitingForReply ? "等待AI回复中..." : isRecording ? "正在语音对话中..." : "输入消息...（Shift+Enter换行）"
+                          isWaitingForReply ? t.chat.input.waitingForReply : isRecording ? t.chat.input.voiceRecording : t.chat.input.placeholder
                         }
                         onKeyDown={(e) => {
                           if (

@@ -71,6 +71,46 @@ export const translations = {
         placeholder: "Enter new nickname",
         confirm: "Confirm"
       }
+    },
+    chat: {
+      header: {
+        aiAssistant: "AI Assistant",
+        status: {
+          offline: "Offline",
+          connecting: "Connecting...",
+          online: "Online",
+          features: "Supports text, voice, documents"
+        },
+        backToWelcome: "Back to welcome screen",
+        loggedInAs: "Logged in as"
+      },
+      input: {
+        placeholder: "Type your message... (Shift+Enter for new line)",
+        waitingForReply: "Waiting for AI response...",
+        voiceRecording: "In voice conversation...",
+        sendButton: "Send"
+      },
+      voice: {
+        recordingHint: "🔴 Voice conversation in progress... Click stop to end",
+        thinking: "AI is thinking...",
+        connectingError: "Connection issue detected, attempting auto-reconnect...",
+        notReadyToChat: "Connecting to server, please wait...",
+        micNotFound: "No microphone detected, please connect a microphone device",
+        micAuthFailed: "Microphone authorization failed",
+        micCloseFailed: "Failed to close microphone",
+        micOpenFailed: "Failed to open microphone"
+      },
+      fileUpload: {
+        sizeLimit: "File size exceeds limit",
+        sizeLimitDesc: "Please select a file no larger than 10MB",
+        uploadFailed: "File upload failed",
+        uploadFailedDesc: "Server returned error",
+        networkError: "Network connection error",
+        cancel: "Cancel"
+      },
+      message: {
+        timeoutError: "Sorry, the response timed out, please try again later."
+      }
     }
   },
   zh: {
@@ -139,6 +179,46 @@ export const translations = {
         placeholder: "请输入新昵称",
         confirm: "确定"
       }
+    },
+    chat: {
+      header: {
+        aiAssistant: "AI助手",
+        status: {
+          offline: "离线",
+          connecting: "正在连接...",
+          online: "在线",
+          features: "支持文本、语音、文档"
+        },
+        backToWelcome: "回到欢迎界面",
+        loggedInAs: "已登录为"
+      },
+      input: {
+        placeholder: "输入消息...（Shift+Enter换行）",
+        waitingForReply: "等待AI回复中...",
+        voiceRecording: "正在语音对话中...",
+        sendButton: "发送"
+      },
+      voice: {
+        recordingHint: "🔴 正在语音对话...点击停止按钮结束本次语音对话",
+        thinking: "AI正在思考...",
+        connectingError: "检测到数据发送失败，正在尝试自动重连...",
+        notReadyToChat: "正在连接服务器，请稍候...",
+        micNotFound: "未检测到麦克风，请插入麦克风设备后重试",
+        micAuthFailed: "麦克风授权失败",
+        micCloseFailed: "关闭麦克风失败",
+        micOpenFailed: "麦克风授权失败"
+      },
+      fileUpload: {
+        sizeLimit: "文件大小超出限制",
+        sizeLimitDesc: "请选择不超过 10MB 的文件",
+        uploadFailed: "文件上传失败",
+        uploadFailedDesc: "服务器返回错误",
+        networkError: "网络连接错误",
+        cancel: "取消"
+      },
+      message: {
+        timeoutError: "抱歉，回复超时了，请稍后重试。"
+      }
     }
   }
 }
@@ -147,6 +227,7 @@ interface LanguageContextType {
   language: Language
   setLanguage: (language: Language) => void
   t: typeof translations.en
+  locale: string
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined)
@@ -154,8 +235,10 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>('en')
 
+  const locale = language === 'zh' ? 'zh-CN' : 'en-US'
+
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t: translations[language] }}>
+    <LanguageContext.Provider value={{ language, setLanguage, t: translations[language], locale }}>
       {children}
     </LanguageContext.Provider>
   )

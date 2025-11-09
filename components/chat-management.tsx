@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { MessageSquare, User, Calendar, Hash, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { useLanguage } from '@/lib/contexts/language-context';
 
 interface Chat {
   chat_id: string;
@@ -21,6 +22,7 @@ interface ChatManagementProps {
 }
 
 export function ChatManagement({ onBack }: ChatManagementProps) {
+  const { locale } = useLanguage();
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -64,7 +66,7 @@ export function ChatManagement({ onBack }: ChatManagementProps) {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('zh-CN', {
+    return new Date(dateString).toLocaleDateString(locale, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',

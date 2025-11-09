@@ -5,6 +5,7 @@ import { User, Shield, Trash2, Calendar, Mail, Hash } from 'lucide-react';
 import { getAllUsers, getUserChatStats, deleteUser } from '@/lib/db/utils';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { useLanguage } from '@/lib/contexts/language-context';
 
 interface User {
   user_id: number;
@@ -25,6 +26,7 @@ interface UserManagementProps {
 }
 
 export function UserManagement({ onBack }: UserManagementProps) {
+  const { locale } = useLanguage();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -104,7 +106,7 @@ export function UserManagement({ onBack }: UserManagementProps) {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('zh-CN', {
+    return new Date(dateString).toLocaleDateString(locale, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
