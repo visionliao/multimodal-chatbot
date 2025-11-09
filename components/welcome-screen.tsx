@@ -13,35 +13,30 @@ interface WelcomeScreenProps {
 
 export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
   const [selectedFeature, setSelectedFeature] = useState(0) // 默认选择Customer Service (索引0)
-  const { language, setLanguage } = useLanguage()
+  const { language, setLanguage, t } = useLanguage()
 
   const features = [
     {
       icon: <MessageCircle className="h-5 w-5" />,
-      title: "Customer Service",
-      description: "客户服务",
-      defaultMessage: "你好，我是客户",
+      title: t.features.customerService.title,
+      description: t.features.customerService.description,
+      defaultMessage: t.features.customerService.defaultMessage,
     },
     {
       icon: <FileText className="h-5 w-5" />,
-      title: "Operations",
-      description: "运营管理",
-      defaultMessage: "你好，我是运营团队",
+      title: t.features.operations.title,
+      description: t.features.operations.description,
+      defaultMessage: t.features.operations.defaultMessage,
     },
     {
       icon: <Mic className="h-5 w-5" />,
-      title: "Asset Management",
-      description: "资管团队",
-      defaultMessage: "你好，我是资管团队",
+      title: t.features.assetManagement.title,
+      description: t.features.assetManagement.description,
+      defaultMessage: t.features.assetManagement.defaultMessage,
     },
   ]
 
-  const presetQuestions = [
-    "Spark公寓的租金价格如何？",
-    "有哪些户型可以选择？",
-    "公寓周边的交通便利吗？",
-    "入住需要什么手续？",
-  ]
+  const presetQuestions = t.presetQuestions
 
   const handleStartChat = () => {
     const selectedMessage = features[selectedFeature].defaultMessage
@@ -92,8 +87,8 @@ export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
           </div>
 
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-white">Hi，我是您的 Spark AI 助手</h1>
-            <p className="text-lg text-gray-200">有任何关于 Spark 公寓的问题都可以咨询我</p>
+            <h1 className="text-3xl font-bold text-white">{t.title}</h1>
+            <p className="text-lg text-gray-200">{t.subtitle}</p>
           </div>
         </div>
 
@@ -131,14 +126,14 @@ export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
             className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-8 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200"
           >
             <MessageCircle className="h-5 w-5 mr-2" />
-            开始对话
+            {t.startChatButton}
           </Button>
 
-          <p className="text-sm text-gray-200">您可以通过文字、语音或上传文档的方式与我交流</p>
+          <p className="text-sm text-gray-200">{t.communicationText}</p>
         </div>
 
         <div className="space-y-3">
-          <p className="text-sm font-medium text-gray-200">您可以这样问我：</p>
+          <p className="text-sm font-medium text-gray-200">{t.presetQuestionsTitle}</p>
           <div className="flex flex-wrap gap-2 justify-center">
             {presetQuestions.map((question, index) => (
               <Button

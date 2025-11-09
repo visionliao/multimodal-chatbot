@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Spark AI Chatbot",
-  description: "支持文本、语音、文档的智能聊天助手",
+  description: "chat assistant that supports text, voice, and document",
   generator: 'vision-liao'
 }
 
