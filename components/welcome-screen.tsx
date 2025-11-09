@@ -1,9 +1,11 @@
 "use client"
 
-import { MessageCircle, FileText, Mic, Sparkles } from "lucide-react"
+import { MessageCircle, FileText, Mic, Sparkles, Globe } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useState } from "react"
+import { useLanguage } from "@/lib/contexts/language-context"
 
 interface WelcomeScreenProps {
   onStartChat: (presetQuestion?: string) => void
@@ -11,6 +13,7 @@ interface WelcomeScreenProps {
 
 export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
   const [selectedFeature, setSelectedFeature] = useState(0) // 默认选择Customer Service (索引0)
+  const { language, setLanguage } = useLanguage()
 
   const features = [
     {
@@ -56,6 +59,20 @@ export function WelcomeScreen({ onStartChat }: WelcomeScreenProps) {
 
   return (
     <div className="flex-1 flex items-center justify-center p-8 relative">
+      {/* 语言切换下拉菜单 */}
+      <div className="absolute top-4 right-4 z-20">
+        <Select value={language} onValueChange={(value: 'en' | 'zh') => setLanguage(value)}>
+          <SelectTrigger className="w-32 bg-white/10 backdrop-blur-sm border-gray-400 text-white">
+            <Globe className="h-4 w-4 mr-2" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="en">English</SelectItem>
+            <SelectItem value="zh">中文</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* 背景图片 */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
