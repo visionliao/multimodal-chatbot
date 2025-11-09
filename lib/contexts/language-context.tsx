@@ -33,7 +33,45 @@ export const translations = {
       "What types of apartment units are available?",
       "Is the transportation around the apartment convenient?",
       "What procedures are required for move-in?"
-    ]
+    ],
+    sidebar: {
+      newChatButton: "New Chat",
+      expandTooltip: "Expand sidebar",
+      collapseTooltip: "Collapse sidebar",
+      today: "Today",
+      last30Days: "Last 30 days",
+      last6Months: "Last 6 months",
+      noChats: "No chat history",
+      rename: "Rename",
+      delete: "Delete",
+      loginButton: "Login",
+      logoutButton: "Logout",
+      editNicknameTooltip: "Edit nickname",
+      logoutTooltip: "Logout"
+    },
+    dialogs: {
+      renameChat: {
+        title: "Rename Chat",
+        label: "Chat Title",
+        placeholder: "Enter new chat title",
+        cancel: "Cancel",
+        confirm: "Confirm"
+      },
+      deleteChat: {
+        title: "Confirm Delete",
+        description: "Are you sure you want to delete this chat? This action cannot be undone.",
+        cancel: "Cancel",
+        delete: "Delete"
+      },
+      editNickname: {
+        title: "Edit Nickname",
+        currentLabel: "Current Nickname",
+        noNickname: "No nickname yet",
+        newLabel: "New Nickname",
+        placeholder: "Enter new nickname",
+        confirm: "Confirm"
+      }
+    }
   },
   zh: {
     title: "Hi，我是您的 Spark AI 助手",
@@ -63,7 +101,45 @@ export const translations = {
       "有哪些户型可以选择？",
       "公寓周边的交通便利吗？",
       "入住需要什么手续？"
-    ]
+    ],
+    sidebar: {
+      newChatButton: "新建对话",
+      expandTooltip: "展开聊天记录",
+      collapseTooltip: "收起聊天记录",
+      today: "当天",
+      last30Days: "最近30天",
+      last6Months: "最近半年",
+      noChats: "暂无聊天记录",
+      rename: "重命名",
+      delete: "删除",
+      loginButton: "登录",
+      logoutButton: "退出登录",
+      editNicknameTooltip: "修改昵称",
+      logoutTooltip: "退出登录"
+    },
+    dialogs: {
+      renameChat: {
+        title: "重命名对话",
+        label: "对话标题",
+        placeholder: "请输入新的对话标题",
+        cancel: "取消",
+        confirm: "确认"
+      },
+      deleteChat: {
+        title: "确认删除",
+        description: "您确定要删除这个对话吗？此操作无法撤销。",
+        cancel: "取消",
+        delete: "删除"
+      },
+      editNickname: {
+        title: "修改昵称",
+        currentLabel: "当前昵称",
+        noNickname: "还没有昵称",
+        newLabel: "新昵称",
+        placeholder: "请输入新昵称",
+        confirm: "确定"
+      }
+    }
   }
 }
 

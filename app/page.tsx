@@ -50,6 +50,7 @@ import { toastAlert } from "@/components/ui/alert-toast";
 import { signIn, signOut, useSession, SessionProvider } from "next-auth/react"
 import { useIsMobile } from "@/components/ui/use-mobile";
 import { useRouter } from 'next/navigation';
+import { useLanguage } from "@/lib/contexts/language-context";
 import {
   saveChatToDB,
   saveMessageToDB,
@@ -85,6 +86,7 @@ interface Chat {
 
 export default function MultimodalChatbot() {
   const isMobile = useIsMobile();
+  const { t } = useLanguage();
   // 基础状态 - 默认没有聊天记录
   // 聊天主逻辑
   const [chats, setChats] = useState<Chat[]>([])
@@ -814,9 +816,9 @@ export default function MultimodalChatbot() {
     const diffTime = now.getTime() - date.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
-    if (diffDays <= 1) return "当天"
-    if (diffDays <= 30) return "最近30天"
-    return "最近半年"
+    if (diffDays <= 1) return t.sidebar.today
+    if (diffDays <= 30) return t.sidebar.last30Days
+    return t.sidebar.last6Months
   }
 
   const groupChatsByTime = (chats: Chat[]) => {
@@ -1060,7 +1062,7 @@ export default function MultimodalChatbot() {
       {sidebarCollapsed && (
         <div
           className="fixed left-4 bottom-4 w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg cursor-pointer z-50"
-          title="展开侧边栏"
+          title={t.sidebar.expandTooltip}
           onClick={toggleSidebar}
         >
           {user ? (
@@ -1091,7 +1093,7 @@ export default function MultimodalChatbot() {
               absolute top-1/2 -translate-y-1/2 -right-3 z-10 h-6 w-6 rounded-full border bg-background shadow-md
               hover:bg-accent transition-all duration-200
             `}
-            title={sidebarCollapsed ? "展开聊天记录" : "收起聊天记录"}
+            title={sidebarCollapsed ? t.sidebar.expandTooltip : t.sidebar.collapseTooltip}
           >
             {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </Button>
@@ -1105,7 +1107,7 @@ export default function MultimodalChatbot() {
                 onClick={() => createNewChat()}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                新建对话
+                {t.sidebar.newChatButton}
               </Button>
             </div>
 
@@ -1149,7 +1151,7 @@ export default function MultimodalChatbot() {
                                     }}
                                   >
                                     <Edit className="h-4 w-4 mr-2" />
-                                    重命名
+                                    {t.sidebar.rename}
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={(e: React.MouseEvent<HTMLDivElement>) => {
@@ -1160,7 +1162,7 @@ export default function MultimodalChatbot() {
                                     className="text-destructive focus:text-destructive"
                                   >
                                     <Trash2 className="h-4 w-4 mr-2" />
-                                    删除此对话
+                                    {t.sidebar.delete}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -1173,7 +1175,7 @@ export default function MultimodalChatbot() {
                 </div>
               ) : (
                 <div className="text-center text-muted-foreground py-8">
-                  <p className="text-sm">暂无聊天记录</p>
+                  <p className="text-sm">{t.sidebar.noChats}</p>
                 </div>
               )}
             </ScrollArea>
@@ -1185,7 +1187,7 @@ export default function MultimodalChatbot() {
                   <div className="flex items-center space-x-2">
                     <div
                       className="h-8 w-8 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 shadow"
-                      title="修改昵称"
+                      title={t.sidebar.editNicknameTooltip}
                       style={{ cursor: 'pointer' }}
                       onClick={() => setShowNicknameDialog(true)}
                     >
@@ -1198,7 +1200,7 @@ export default function MultimodalChatbot() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    title="退出登录"
+                    title={t.sidebar.logoutTooltip}
                     onClick={async () => {
                       if (room && room.state !== 'disconnected') {
                         try { await room.disconnect(); } catch (e) { console.error('断开 livekit 失败', e); }
@@ -1222,7 +1224,7 @@ export default function MultimodalChatbot() {
                     signIn(undefined, { callbackUrl: '/login' });
                   }}
                 >
-                  <LogIn className="h-4 w-4 mr-2" /> 登录
+                  <LogIn className="h-4 w-4 mr-2" /> {t.sidebar.loginButton}
                 </Button>
               )}
             </div>
@@ -1236,7 +1238,7 @@ export default function MultimodalChatbot() {
             variant="ghost"
             onClick={toggleSidebar}
             className="absolute top-1/2 -translate-y-1/2 left-4 z-10 h-8 w-8 rounded-full border bg-background shadow-md hover:bg-accent"
-            title="展开聊天记录"
+            title={t.sidebar.expandTooltip}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -1523,24 +1525,24 @@ export default function MultimodalChatbot() {
         <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>重命名对话</DialogTitle>
+              <DialogTitle>{t.dialogs.renameChat.title}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="chat-title">对话标题</Label>
+                <Label htmlFor="chat-title">{t.dialogs.renameChat.label}</Label>
                 <Input
                   id="chat-title"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="请输入新的对话标题"
+                  placeholder={t.dialogs.renameChat.placeholder}
                 />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowRenameDialog(false)}>
-                取消
+                {t.dialogs.renameChat.cancel}
               </Button>
-              <Button onClick={renameChat}>确认</Button>
+              <Button onClick={renameChat}>{t.dialogs.renameChat.confirm}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -1549,16 +1551,16 @@ export default function MultimodalChatbot() {
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>确认删除</AlertDialogTitle>
-              <AlertDialogDescription>您确定要删除这个对话吗？此操作无法撤销。</AlertDialogDescription>
+              <AlertDialogTitle>{t.dialogs.deleteChat.title}</AlertDialogTitle>
+              <AlertDialogDescription>{t.dialogs.deleteChat.description}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogCancel>{t.dialogs.deleteChat.cancel}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={deleteChat}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                删除
+                {t.dialogs.deleteChat.delete}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1568,27 +1570,27 @@ export default function MultimodalChatbot() {
         <Dialog open={showNicknameDialog} onOpenChange={setShowNicknameDialog}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle className="text-center w-full">修改昵称</DialogTitle>
+              <DialogTitle className="text-center w-full">{t.dialogs.editNickname.title}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="text-base font-medium">当前昵称</div>
+              <div className="text-base font-medium">{t.dialogs.editNickname.currentLabel}</div>
               {!(user?.nickname?.trim()) ? (
-                <div className="text-muted-foreground">还没有昵称</div>
+                <div className="text-muted-foreground">{t.dialogs.editNickname.noNickname}</div>
               ) : (
                 <div className="text-primary font-semibold">{user.nickname}</div>
               )}
-              <div className="text-base font-medium mt-2">新昵称</div>
+              <div className="text-base font-medium mt-2">{t.dialogs.editNickname.newLabel}</div>
               <Input
                 value={newNickname}
                 onChange={e => setNewNickname(e.target.value)}
-                placeholder="请输入新昵称"
+                placeholder={t.dialogs.editNickname.placeholder}
               />
             </div>
             <DialogFooter>
               <Button
                 onClick={handleNicknameChange}
               >
-                确定
+                {t.dialogs.editNickname.confirm}
               </Button>
             </DialogFooter>
           </DialogContent>

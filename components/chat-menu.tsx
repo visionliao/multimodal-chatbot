@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { MoreHorizontal, Edit, Trash2 } from "lucide-react"
+import { useLanguage } from "@/lib/contexts/language-context"
 
 interface ChatMenuProps {
   chatId: string
@@ -31,6 +32,7 @@ export function ChatMenu({ chatId, chatTitle, onRename, onDelete }: ChatMenuProp
   const [showRenameDialog, setShowRenameDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [newTitle, setNewTitle] = useState(chatTitle)
+  const { t } = useLanguage()
 
   const handleRename = () => {
     if (newTitle.trim() && newTitle !== chatTitle) {
@@ -65,7 +67,7 @@ export function ChatMenu({ chatId, chatTitle, onRename, onDelete }: ChatMenuProp
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => setShowRenameDialog(true)}>
             <Edit className="h-4 w-4 mr-2" />
-            重命名
+            {t.sidebar.rename}
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={(e) => {
@@ -76,7 +78,7 @@ export function ChatMenu({ chatId, chatTitle, onRename, onDelete }: ChatMenuProp
             className="text-destructive focus:text-destructive"
           >
             <Trash2 className="h-4 w-4 mr-2" />
-            删除此对话
+            {t.sidebar.delete}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -85,24 +87,24 @@ export function ChatMenu({ chatId, chatTitle, onRename, onDelete }: ChatMenuProp
       <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>重命名对话</DialogTitle>
+            <DialogTitle>{t.dialogs.renameChat.title}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="chat-title">对话标题</Label>
+              <Label htmlFor="chat-title">{t.dialogs.renameChat.label}</Label>
               <Input
                 id="chat-title"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="请输入新的对话标题"
+                placeholder={t.dialogs.renameChat.placeholder}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowRenameDialog(false)}>
-              取消
+              {t.dialogs.renameChat.cancel}
             </Button>
-            <Button onClick={handleRename}>确认</Button>
+            <Button onClick={handleRename}>{t.dialogs.renameChat.confirm}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -111,16 +113,16 @@ export function ChatMenu({ chatId, chatTitle, onRename, onDelete }: ChatMenuProp
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认删除</AlertDialogTitle>
-            <AlertDialogDescription>您确定要删除这个对话吗？此操作无法撤销。</AlertDialogDescription>
+            <AlertDialogTitle>{t.dialogs.deleteChat.title}</AlertDialogTitle>
+            <AlertDialogDescription>{t.dialogs.deleteChat.description}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t.dialogs.deleteChat.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              删除
+              {t.dialogs.deleteChat.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
