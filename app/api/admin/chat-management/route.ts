@@ -25,7 +25,7 @@ export async function GET() {
       id: messages.message_id,
       content: messages.content,
       messageSource: messages.message_source,
-      createdAt: messages.created_at,
+      createdAt: sql<string>`${messages.created_at}::text`.as('createdAt'),
       chatId: messages.chat_id,
       userId: messages.user_id,
       userEmail: users.email,
@@ -40,7 +40,7 @@ export async function GET() {
       id: tempMessages.temp_message_id,
       content: tempMessages.content,
       messageSource: tempMessages.message_source,
-      createdAt: tempMessages.created_at,
+      createdAt: sql<string>`${tempMessages.created_at}::text`.as('createdAt'),
       chatId: sql`'temp'`.as('chatId'), // 游客消息没有chat_id
       userId: sql`'temp'`.as('userId'), // 游客统一ID
       userEmail: sql`'游客'`.as('userEmail'),
