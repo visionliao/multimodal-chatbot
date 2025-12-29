@@ -66,6 +66,119 @@ import {
 import showdown from 'showdown';
 import { ConnectionError } from 'livekit-client';
 
+// 1. 图片映射关系配置
+const IMAGE_MAPPING: Record<string, string[]> = {
+  "STD.jpg": ["n29_01.jpg", "n29_02.jpg"],
+  "STE.jpg": ["s35_01.jpg", "s35_02.jpg", "s35_03.jpg", "s35_04.jpg"],
+  "1BD.jpg": ["n46_01.jpg", "n46_02.jpg", "n46_03.jpg", "n46_04.jpg"],
+  "1BP.jpg": ["n59_01.jpg", "n59_02.jpg", "n59_03.jpg", "n59_04.jpg"],
+  "STP.jpg": ["s50_01.jpg", "s50_02.jpg", "s50_03.jpg"],
+  "2BD.jpg": ["s74_01.jpg", "s74_02.jpg", "s74_03.jpg", "s74_04.jpg", "s74_05.jpg"],
+  "3BR.jpg": ["s74_01.jpg", "s74_02.jpg", "s74_03.jpg", "s74_04.jpg", "s74_05.jpg"],
+  // 如果后端返回了 Commonarea 里的原名（如 gym.jpg），默认保留原名
+};
+
+// 2. 公区图片模糊匹配逻辑 (根据你的要求定制)
+const resolveCommonAreaImage = (rawName: string): string => {
+  const lowerName = rawName.toLowerCase().trim();
+
+  // 规则 1: 包含 yoga -> yoga_room.jpg
+  if (lowerName.includes("yoga")) return "yoga_room.jpg";
+
+  // 规则 2: 包含 kitchen -> privatekitchen.jpg
+  if (lowerName.includes("kitchen")) return "privatekitchen.jpg";
+
+  // 规则 3: 包含 pool01 -> pool.jpg
+  // 注意：如果只是 pool.jpg 也会走默认逻辑，这里专门处理错误的 POOL01
+  if (lowerName.includes("pool01")) return "pool.jpg";
+
+  // 规则 4: 包含 telephone 或 booth -> telephone_booth.jpg
+  if (lowerName.includes("telephone") || lowerName.includes("booth")) return "telephone_booth.jpg";
+
+  // 规则 5: 包含 music -> music_room.jpg
+  if (lowerName.includes("music")) return "music_room.jpg";
+
+  // 补充规则 (基于你的日志): 处理 Bar.jpg -> bar.jpg, KTV.jpg -> ktv.jpg
+  // 你的文件系统中 bar.jpg, ktv.jpg, patio.jpg 都是小写的，
+  // 所以默认情况下，我们把名字转成全小写返回即可解决大部分 404。
+  return lowerName;
+};
+
+// 2. 解析消息内容的函数
+interface ParsedContent {
+  text: string;
+  images: string[];
+}
+
+const parseMessageWithImages = (content: string): ParsedContent => {
+  const regex = /show_image\s*:\s*\[([\s\S]*?)\]/;
+  const match = content.match(regex);
+
+  let text = content;
+  const resultImages: string[] = [];
+  const MAX_IMAGES = 6; // 限制为6张
+
+  if (match) {
+    // 1. 截取掉 show_image 部分
+    text = content.replace(match[0], "").trim();
+
+    // 2. 解析图片列表
+    const rawListString = match[1];
+    if (rawListString && rawListString.trim().length > 0) {
+      // 提取原始名称并去重分类
+      const rawNames = Array.from(new Set(
+        rawListString
+          .split(",")
+          .map(s => s.trim().replace(/['"]/g, ""))
+          .filter(s => s.length > 0)
+      ));
+
+      const categoryCount = rawNames.length;
+
+      if (categoryCount > 0) {
+        // 全局去重集合
+        const globalUsedImages = new Set<string>();
+
+        // 3. 计算配额
+        // 比如 6 张图，2 个房型 -> 每个房型分 3 张
+        const baseQuota = Math.floor(MAX_IMAGES / categoryCount);
+        const remainder = MAX_IMAGES % categoryCount;
+
+        // 4. 遍历分类分配图片
+        rawNames.forEach((name, index) => {
+          let candidates: string[] = [];
+
+          // 获取候选图（不再打乱，保持默认顺序）
+          if (IMAGE_MAPPING[name]) {
+            candidates = IMAGE_MAPPING[name];
+          } else {
+            candidates = [resolveCommonAreaImage(name)];
+          }
+
+          // 计算当前分类的配额
+          const currentQuota = baseQuota + (index < remainder ? 1 : 0);
+
+          // 挑选图片 (去重)
+          let pickedCount = 0;
+          for (const img of candidates) {
+            // 配额满了就停
+            if (pickedCount >= currentQuota) break;
+
+            // 如果这张图之前没被选过，就选中它
+            if (!globalUsedImages.has(img)) {
+              globalUsedImages.add(img);
+              resultImages.push(img);
+              pickedCount++;
+            }
+          }
+        });
+      }
+    }
+  }
+
+  return { text, images: resultImages };
+};
+
 interface Message {
   id: string
   content: string
@@ -133,6 +246,9 @@ export default function MultimodalChatbot() {
   const router = useRouter();
   // 类型断言扩展 user 字段
   const user = session && session.user ? (session.user as typeof session.user & { nickname?: string; username?: string; user_id?: number }) : undefined;
+
+  // 图片预览状态
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // --- 用于检测 root 用户并重定向 ---
   useEffect(() => {
@@ -1327,6 +1443,7 @@ export default function MultimodalChatbot() {
                       );
                     }
 
+                    const { text: displayText, images: displayImages } = parseMessageWithImages(message.content);
                     // --- 渲染消息气泡 ---
                     acc.push(
                       <div
@@ -1357,10 +1474,42 @@ export default function MultimodalChatbot() {
                             )}
                             {message.sender === 'bot' ? (
                               <div
-                                dangerouslySetInnerHTML={{ __html: converter.makeHtml(message.content) }}
+                                dangerouslySetInnerHTML={{ __html: converter.makeHtml(displayText) }}
                               />
                             ) : (
-                              <div className="whitespace-pre-line">{message.content}</div>
+                              <div className="whitespace-pre-line">{displayText}</div>
+                            )}
+                            {/* --- 图片网格展示 --- */}
+                            {displayImages.length > 0 && (
+                              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                {displayImages.map((imgName, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="relative aspect-square overflow-hidden rounded-md cursor-pointer border border-gray-200 hover:opacity-90 transition-opacity group"
+                                    onClick={() => setPreviewImage(imgName)}
+                                  >
+                                    {/* 这里的 src 指向我们刚写的 API，浏览器会自动根据 Header 进行缓存 */}
+                                    <img
+                                      src={`/api/chat-images/${imgName}`}
+                                      alt="Room preview"
+                                      className="object-cover w-full h-full"
+                                      loading="lazy"
+                                      // 如果加载失败（404），则隐藏该图片元素，避免显示裂图图标
+                                      onError={(e) => {
+                                        const target = e.target as HTMLImageElement;
+                                        target.style.display = 'none';
+                                        // 或者替换为一张默认图：target.src = '/default-placeholder.jpg';
+                                      }}
+                                    />
+                                    {/* 放大镜图标遮罩 */}
+                                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                      <div className="bg-black/50 p-1.5 rounded-full text-white">
+                                          <Image className="w-4 h-4" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
                           <span
@@ -1593,6 +1742,28 @@ export default function MultimodalChatbot() {
                 {t.dialogs.editNickname.confirm}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 图片大图预览 Dialog */}
+        <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
+          <DialogContent className="max-w-4xl w-full p-1 bg-transparent border-none shadow-none text-white sm:max-w-[90vw] sm:h-[90vh] flex flex-col justify-center items-center">
+            {/* 这里去掉了 DialogHeader/Title 以获得沉浸式体验，但要保留关闭能力 */}
+            <div className="relative w-full h-full flex items-center justify-center">
+              {previewImage && (
+                <img
+                  src={`/api/chat-images/${previewImage}`}
+                  alt="Full preview"
+                  className="max-w-full max-h-full object-contain rounded-md"
+                />
+              )}
+              <button
+                  onClick={() => setPreviewImage(null)}
+                  className="absolute top-2 right-2 bg-black/50 p-2 rounded-full hover:bg-black/70 text-white"
+              >
+                  <X className="w-6 h-6" />
+              </button>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
