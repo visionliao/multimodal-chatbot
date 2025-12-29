@@ -1606,10 +1606,10 @@ export default function MultimodalChatbot() {
                             {/* 右侧：文字描述 + 计时器 */}
                             <div className="flex flex-col justify-center min-w-[100px]"> {/* min-w 防止数字变化导致宽度抖动 */}
                               <span className="text-sm font-medium text-foreground/90 tabular-nums"> {/* tabular-nums 确保数字等宽 */}
-                                思考中... ({thinkingTime}s)
+                                Thinking... ({thinkingTime}s)
                               </span>
                               <span className="text-[10px] text-muted-foreground">
-                                Spark AI 正在生成回答
+                                Spark AI is generating answers
                               </span>
                             </div>
                           </div>
