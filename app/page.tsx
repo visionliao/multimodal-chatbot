@@ -241,6 +241,8 @@ export default function MultimodalChatbot() {
   const insertedTranscriptionIds = useRef<Set<string>>(new Set());
   // 记录最后一条livekit回复消息和当前聊天id
   const lastBotMessage = useRef<{ message: string; chatId: string | null } | null>(null);
+  // 用于标记当前对话是否已超时，如果超时，后续到达的流式消息将被忽略
+  const isResponseTimeout = useRef(false);
 
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -249,6 +251,29 @@ export default function MultimodalChatbot() {
 
   // 图片预览状态
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  // 思考耗时计时器
+  const [thinkingTime, setThinkingTime] = useState(0);
+
+  // 处理思考时间的计时器
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (isWaitingForReply) {
+      // 开始等待：重置时间为 0，并启动定时器
+      setThinkingTime(0);
+      interval = setInterval(() => {
+        setThinkingTime((prev) => prev + 1);
+      }, 1000);
+    } else {
+      // 结束等待：重置时间 (可选，也可以留着最后的时间，但为了下次干净显示，建议重置)
+      setThinkingTime(0);
+    }
+
+    // 清理函数：组件卸载或状态变化时清除定时器
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isWaitingForReply]);
 
   // --- 用于检测 root 用户并重定向 ---
   useEffect(() => {
@@ -345,15 +370,25 @@ export default function MultimodalChatbot() {
       .slice(-1)[0]; // 只取最后一条
 
     if (!botStream || !botStream.message) return;
+
     // 判断是否是上一个聊天的缓存消息，因为监听livekitMessages，只要发送消息会马上获得上一次最后的流式数据
     if (
       lastBotMessage.current &&
-      lastBotMessage.current.message === botStream.message &&
-      lastBotMessage.current.chatId !== currentChatId
+      lastBotMessage.current.message === botStream.message
     ) {
       console.log("lhf 忽略历史缓存消息:", botStream.message);
       return; //属于上一个聊天的消息，不插入 UI
     }
+
+    // 检查是否已经超时。如果超时标记为 true，则直接忽略这条迟到的消息
+    if (isResponseTimeout.current) {
+      console.log("lhf 忽略超时后的迟到消息");
+      return;
+    }
+
+    // 收到第一条有效消息，停止“正在思考”动画，解锁输入框
+    setIsWaitingForReply(false);
+
     // 是新的消息 or 属于当前聊天的消息，更新 lastBotMessage
     lastBotMessage.current = {
       message: botStream.message,
@@ -409,7 +444,7 @@ export default function MultimodalChatbot() {
         return chat;
       })
     );
-  }, [livekitMessages, room]);
+  }, [livekitMessages, room, currentChatId]);
 
   // 监听用户自己的语音转文字消息，插入到聊天流
   useEffect(() => {
@@ -599,6 +634,7 @@ export default function MultimodalChatbot() {
     }
     if ((!inputValue.trim() && !selectedFile) || isWaitingForReply || (selectedFile && (!uploadedFileInfo || isUploading))) return;
     setIsWaitingForReply(true);
+    isResponseTimeout.current = false;
 
     // 发送到 livekit
     if (room && isReadyToChat) {
@@ -671,7 +707,7 @@ export default function MultimodalChatbot() {
       });
       setCurrentChatId(mergedChat.id);
       setTempChat(null);
-      setIsWaitingForReply(false); // 立即解锁
+      // setIsWaitingForReply(false); // 立即解锁
       if (user) {
         await saveChatToDB(user, mergedChat.id, inputValue);
         newMessage.id = `msg_${Date.now()}`;
@@ -700,7 +736,7 @@ export default function MultimodalChatbot() {
       };
       setChats([newChat]);
       setCurrentChatId(newChatId);
-      setIsWaitingForReply(false); // 立即解锁
+      // setIsWaitingForReply(false); // 立即解锁
       if (user) {
         await saveChatToDB(user, newChatId, inputValue);
         newMessage.id = `msg_${Date.now()}`;
@@ -745,7 +781,7 @@ export default function MultimodalChatbot() {
         });
         return result;
       });
-      setIsWaitingForReply(false); // 立即解锁
+      // setIsWaitingForReply(false); // 立即解锁
     }
 
     setInputValue("");
@@ -762,44 +798,6 @@ export default function MultimodalChatbot() {
     setTimeout(() => {
       inputRef.current?.focus();
     }, 100);
-
-    // 模拟AI回复，包含错误处理和超时
-    const errorTimeout = setTimeout(() => {
-      if (isWaitingForReply) {
-        const errorReply: Message = {
-          id: `msg_${Date.now() + 2}`,
-          content: t.chat.message.timeoutError,
-          sender: "bot",
-          timestamp: new Date(),
-          type: 0,
-        }
-
-        if (currentChatId) {
-          setChats((prev) =>
-            prev.map((chat) => {
-              if (chat.id === currentChatId) {
-                return {
-                  ...chat,
-                  messages: [...chat.messages, errorReply],
-                }
-              }
-              return chat
-            }),
-          )
-        }
-
-        setIsWaitingForReply(false) // 超时后重置状态
-        // 自动获取输入框焦点
-        setTimeout(() => {
-          inputRef.current?.focus()
-        }, 100)
-      }
-    }, 10000)
-
-    // 清理函数
-    return () => {
-      clearTimeout(errorTimeout)
-    }
   }
 
   // 重命名聊天
@@ -1526,15 +1524,39 @@ export default function MultimodalChatbot() {
                   }, [])}
                   {/* AI思考中loading气泡 */}
                   {isWaitingForReply && (
-                    <div className="flex items-start space-x-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback>
-                          <Bot className="h-4 w-4" />
+                    <div className="flex items-start space-x-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      {/* 头像部分 */}
+                      <Avatar className="h-8 w-8 border border-primary/20">
+                        <AvatarFallback className="bg-primary/5">
+                          <Bot className="h-4 w-4 text-primary animate-pulse" />
                         </AvatarFallback>
                       </Avatar>
-                      <div className="flex flex-col space-y-1 max-w-[70%]">
-                        <div className="rounded-lg px-4 py-2 bg-muted animate-pulse">
-                          <span className="text-sm text-muted-foreground">{t.chat.voice.thinking}</span>
+
+                      <div className="flex flex-col space-y-1">
+                        {/* 气泡主体 */}
+                        <div className="relative overflow-hidden rounded-lg bg-muted/50 border border-primary/10 shadow-sm p-3">
+
+                          <div className="flex items-center space-x-3">
+                            {/* 左侧：动态波形动画 */}
+                            <div className="flex items-center gap-1 h-4">
+                              <span className="w-1 h-3 bg-primary/60 rounded-full animate-[bounce_1s_infinite_-0.2s]"></span>
+                              <span className="w-1 h-5 bg-primary/80 rounded-full animate-[bounce_1s_infinite_-0.1s]"></span>
+                              <span className="w-1 h-3 bg-primary/60 rounded-full animate-[bounce_1s_infinite]"></span>
+                            </div>
+
+                            {/* 右侧：文字描述 + 计时器 */}
+                            <div className="flex flex-col justify-center min-w-[100px]"> {/* min-w 防止数字变化导致宽度抖动 */}
+                              <span className="text-sm font-medium text-foreground/90 tabular-nums"> {/* tabular-nums 确保数字等宽 */}
+                                思考中... ({thinkingTime}s)
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">
+                                Spark AI 正在生成回答
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* 底部流光条 */}
+                          <div className="absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-transparent via-primary/50 to-transparent animate-pulse" />
                         </div>
                       </div>
                     </div>
