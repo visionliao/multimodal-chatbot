@@ -253,6 +253,10 @@ export default function MultimodalChatbot() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   // 思考耗时计时器
   const [thinkingTime, setThinkingTime] = useState(0);
+  // 用于存储超时定时器的 Ref
+  const responseTimeoutTimer = useRef<NodeJS.Timeout | null>(null);
+  // 超时时长配置 60秒
+  const RESPONSE_TIMEOUT_MS = 60000;
 
   // 处理思考时间的计时器
   useEffect(() => {
@@ -274,6 +278,14 @@ export default function MultimodalChatbot() {
       if (interval) clearInterval(interval);
     };
   }, [isWaitingForReply]);
+
+  useEffect(() => {
+    return () => {
+      if (responseTimeoutTimer.current) {
+        clearTimeout(responseTimeoutTimer.current);
+      }
+    };
+  }, []);
 
   // --- 用于检测 root 用户并重定向 ---
   useEffect(() => {
@@ -384,6 +396,11 @@ export default function MultimodalChatbot() {
     if (isResponseTimeout.current) {
       console.log("lhf 忽略超时后的迟到消息");
       return;
+    }
+
+    if (responseTimeoutTimer.current) {
+      clearTimeout(responseTimeoutTimer.current);
+      responseTimeoutTimer.current = null;
     }
 
     // 收到第一条有效消息，停止“正在思考”动画，解锁输入框
@@ -690,6 +707,7 @@ export default function MultimodalChatbot() {
     }
 
     let realMessageId = newMessage.id;
+    let targetChatId = currentChatId || "";
 
     // 发送消息 只在 chats.length === 0 时新建聊天
     if (tempChat) {
@@ -701,6 +719,7 @@ export default function MultimodalChatbot() {
         lastMessage: inputValue,
         timestamp: new Date(),
       };
+      targetChatId = mergedChat.id;
       setChats((prev) => {
         const result = [mergedChat, ...prev];
         return result;
@@ -734,6 +753,7 @@ export default function MultimodalChatbot() {
         lastMessage: inputValue,
         timestamp: new Date(),
       };
+      targetChatId = newChatId;
       setChats([newChat]);
       setCurrentChatId(newChatId);
       // setIsWaitingForReply(false); // 立即解锁
@@ -753,6 +773,7 @@ export default function MultimodalChatbot() {
         await saveTempMessageToDB(newMessage.id, inputValue, 0, type);
       }
     } else if (currentChatId) {
+      targetChatId = currentChatId;
       if (user) {
         await saveChatToDB(user, currentChatId, inputValue);
         const res = await saveMessageToDB(user, newMessage.id, currentChatId, inputValue, 0, type);
@@ -798,6 +819,44 @@ export default function MultimodalChatbot() {
     setTimeout(() => {
       inputRef.current?.focus();
     }, 100);
+
+    // 1. 如果有旧的定时器，先清除
+    if (responseTimeoutTimer.current) {
+      clearTimeout(responseTimeoutTimer.current);
+    }
+
+    // 2. 启动新的超时倒计时
+    responseTimeoutTimer.current = setTimeout(() => {
+      // 检查当前是否还在等待中
+      if (isResponseTimeout.current === false) {
+        console.warn(`AI 响应超时, ChatID: ${targetChatId}`);
+        isResponseTimeout.current = true; // 拒绝后续消息
+        setIsWaitingForReply(false);      // 解锁 UI
+        setThinkingTime(0);               // 重置计时
+
+        // 使用之前捕获的 targetChatId 确保消息插入正确的对话
+        setChats(prevChats => {
+          return prevChats.map(chat => {
+            if (chat.id === targetChatId) {
+               return {
+                 ...chat,
+                 messages: [
+                   ...chat.messages,
+                   {
+                     id: `timeout_${Date.now()}`,
+                     content: "响应超时，请重试。",
+                     sender: "bot",
+                     timestamp: new Date(),
+                     type: 0
+                   }
+                 ]
+               };
+            }
+            return chat;
+          });
+        });
+      }
+    }, RESPONSE_TIMEOUT_MS);
   }
 
   // 重命名聊天
