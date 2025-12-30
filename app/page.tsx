@@ -656,7 +656,16 @@ export default function MultimodalChatbot() {
     // 发送到 livekit
     if (room && isReadyToChat) {
       try {
-        await send(inputValue);
+        // 构建带日期的消息发送给 LiveKit，但不影响本地显示和存储
+        // 获取当前日期 YYYY-MM-DD
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const formattedDate = `${year}-${month}-${day}`;
+
+        const messageToAgent = `[当前日期: ${formattedDate}]\n${inputValue}`;
+        await send(messageToAgent);
       } catch (e) {
         console.error("发送到 livekit 失败", e);
         if (e instanceof ConnectionError && e.message.includes('Publisher connection')) {
