@@ -372,9 +372,9 @@ export default function MultimodalChatbot() {
 
   // 监听livekit回复的语音转文本useEffect：
   useEffect(() => {
-    if (!currentChatId) return;
-    const currentChat = chats.find(chat => chat.id === currentChatId);
-    if (!currentChat) return;
+    if (!currentChatId && !tempChat) return;
+    // const currentChat = chats.find(chat => chat.id === currentChatId);
+    // if (!currentChat) return;
 
     // 找到最新一条 bot 流式消息
     const botStream = livekitMessages
@@ -409,58 +409,93 @@ export default function MultimodalChatbot() {
     // 是新的消息 or 属于当前聊天的消息，更新 lastBotMessage
     lastBotMessage.current = {
       message: botStream.message,
-      chatId: currentChatId,
+      chatId: currentChatId || "temp",
     };
     // 持久化
-    (async () => {
-      if (user) {
-        await saveChatToDB(user, currentChatId, botStream.message);
-        await saveMessageToDB(user, botStream.id, currentChatId, botStream.message, 1, 0);
-      } else {
-        await saveTempMessageToDB(botStream.id, botStream.message, 1, 0);
-      }
-    })();
-
-    setChats(prev =>
-      prev.map(chat => {
-        if (chat.id === currentChatId) {
-          const lastMsg = chat.messages[chat.messages.length - 1];
-          // 只有当最后一条消息是bot且id相同才更新，否则插入新消息
-          if (lastMsg && lastMsg.sender === "bot" && lastMsg.id === botStream.id) {
-            // 更新最后一条 bot 消息内容
-            const newMessages = [...chat.messages];
-            newMessages[newMessages.length - 1] = {
-              ...lastMsg,
-              content: botStream.message,
-              //timestamp: new Date(),
-            };
-            return { ...chat, messages: newMessages };
-          } else {
-            // 只在botStream.id不存在于当前消息时插入新消息
-            const exists = chat.messages.some(m => m.id === botStream.id);
-            if (exists) return chat;
-            setTimeout(() => {
-              inputRef.current?.focus();
-            }, 0);
-            return {
-              ...chat,
-              messages: [
-                ...chat.messages,
-                {
-                  id: botStream.id || `msg_${Date.now()}`,
-                  content: botStream.message,
-                  sender: "bot" as "bot",
-                  timestamp: new Date(),
-                  type: 0,
-                  fileName: undefined,
-                },
-              ],
-            };
-          }
+    if (currentChatId) {
+      (async () => {
+        if (user) {
+          await saveChatToDB(user, currentChatId, botStream.message);
+          await saveMessageToDB(user, botStream.id, currentChatId, botStream.message, 1, 0);
+        } else {
+          await saveTempMessageToDB(botStream.id, botStream.message, 1, 0);
         }
-        return chat;
-      })
-    );
+      })();
+
+      setChats(prev =>
+        prev.map(chat => {
+          if (chat.id === currentChatId) {
+            const lastMsg = chat.messages[chat.messages.length - 1];
+            // 只有当最后一条消息是bot且id相同才更新，否则插入新消息
+            if (lastMsg && lastMsg.sender === "bot" && lastMsg.id === botStream.id) {
+              // 更新最后一条 bot 消息内容
+              const newMessages = [...chat.messages];
+              newMessages[newMessages.length - 1] = {
+                ...lastMsg,
+                content: botStream.message,
+                //timestamp: new Date(),
+              };
+              return { ...chat, messages: newMessages };
+            } else {
+              // 只在botStream.id不存在于当前消息时插入新消息
+              const exists = chat.messages.some(m => m.id === botStream.id);
+              if (exists) return chat;
+              setTimeout(() => {
+                inputRef.current?.focus();
+              }, 0);
+              return {
+                ...chat,
+                messages: [
+                  ...chat.messages,
+                  {
+                    id: botStream.id || `msg_${Date.now()}`,
+                    content: botStream.message,
+                    sender: "bot" as "bot",
+                    timestamp: new Date(),
+                    type: 0,
+                    fileName: undefined,
+                  },
+                ],
+              };
+            }
+          }
+          return chat;
+        })
+      );
+    } else if (tempChat) { // 是临时对话 (Temp Chat / 开场白)
+      setTempChat(prev => {
+        if (!prev) return null;
+        // 检查最后一条是否已经是机器人的消息（即使ID不同，为了避免开场白重复，我们也覆盖它）
+        const messages = [...prev.messages];
+        const lastMsg = messages[messages.length - 1];
+
+        // 如果最后一条是 bot，直接更新内容 (实现流式效果)
+        if (lastMsg && lastMsg.sender === "bot") {
+            messages[messages.length - 1] = {
+                ...lastMsg,
+                id: botStream.id, // 同步ID
+                content: botStream.message,
+                timestamp: new Date() // 刷新时间让它看起来是即时的
+            };
+        } else {
+            // 如果最后一条不是 bot (极少情况)，追加一条
+            messages.push({
+                id: botStream.id,
+                content: botStream.message,
+                sender: "bot",
+                timestamp: new Date(),
+                type: 0
+            });
+        }
+
+        return {
+          ...prev,
+          messages: messages,
+          lastMessage: botStream.message,
+          timestamp: new Date()
+        };
+      });
+    }
   }, [livekitMessages, room, currentChatId]);
 
   // 监听用户自己的语音转文字消息，插入到聊天流
