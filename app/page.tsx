@@ -79,7 +79,7 @@ const IMAGE_MAPPING: Record<string, string[]> = {
 };
 
 // 2. 公区图片模糊匹配逻辑 (根据你的要求定制)
-const resolveCommonAreaImage = (rawName: string): string => {
+const resolveCommonAreaImage = (rawName: string): string | null => {
   const lowerName = rawName.toLowerCase().trim();
 
   // 规则 1: 包含 yoga -> yoga_room.jpg
@@ -90,7 +90,7 @@ const resolveCommonAreaImage = (rawName: string): string => {
 
   // 规则 3: 包含 pool01 -> pool.jpg
   // 注意：如果只是 pool.jpg 也会走默认逻辑，这里专门处理错误的 POOL01
-  if (lowerName.includes("pool01")) return "pool.jpg";
+  if (lowerName.includes("pool")) return "pool.jpg";
 
   // 规则 4: 包含 telephone 或 booth -> telephone_booth.jpg
   if (lowerName.includes("telephone") || lowerName.includes("booth")) return "telephone_booth.jpg";
@@ -98,10 +98,32 @@ const resolveCommonAreaImage = (rawName: string): string => {
   // 规则 5: 包含 music -> music_room.jpg
   if (lowerName.includes("music")) return "music_room.jpg";
 
-  // 补充规则 (基于你的日志): 处理 Bar.jpg -> bar.jpg, KTV.jpg -> ktv.jpg
-  // 你的文件系统中 bar.jpg, ktv.jpg, patio.jpg 都是小写的，
-  // 所以默认情况下，我们把名字转成全小写返回即可解决大部分 404。
-  return lowerName;
+  // 规则 6：包含Spark 或 Logo
+  if (lowerName.includes("spark") || lowerName.includes("logo")) return "lobby.jpg";
+
+  if (lowerName.includes("gym") || lowerName.includes("fitness")) return "gym.jpg";
+  if (['bar.jpg', 'ktv.jpg', 'patio.jpg', 'lobby.jpg', 'lobby2'].includes(lowerName)) return lowerName;
+  return null;
+};
+
+// 解决 "n2901.jpg" 这种房号幻觉
+const findRealImagesByPrefix = (hallucinatedName: string): string[] => {
+  // 正则提取前缀：匹配 n 或 s 开头，后面紧跟至少2位数字 (如 n29, s35)
+  const match = hallucinatedName.match(/^([ns]\d{2})/i);
+  if (!match) return [];
+
+  const prefix = match[1].toLowerCase(); // 得到 "n29" 或 "s35"
+
+  // 遍历 IMAGE_MAPPING 的所有值（真实图片列表）
+  // 只要列表中的第一张图包含了这个前缀，我们就认为这个列表是匹配的
+  for (const key in IMAGE_MAPPING) {
+    const realList = IMAGE_MAPPING[key];
+    // 假设 realList[0] 是 "n29_01.jpg"，它以 "n29" 开头，匹配成功
+    if (realList.length > 0 && realList[0].toLowerCase().startsWith(prefix)) {
+      return realList; // 直接返回这个列表，保持原有顺序
+    }
+  }
+  return [];
 };
 
 // 2. 解析消息内容的函数
@@ -111,60 +133,67 @@ interface ParsedContent {
 }
 
 const parseMessageWithImages = (content: string): ParsedContent => {
-  const regex = /show_image\s*:\s*\[([\s\S]*?)\]/;
+  const regex = /show_image\s*:\s*(\[?[\s\S]*)/i;
   const match = content.match(regex);
 
   let text = content;
   const resultImages: string[] = [];
-  const MAX_IMAGES = 6; // 限制为6张
+  const MAX_IMAGES = 9; // 最大 9 张
 
   if (match) {
-    // 1. 截取掉 show_image 部分
     text = content.replace(match[0], "").trim();
+    const rawContent = match[1];
 
-    // 2. 解析图片列表
-    const rawListString = match[1];
-    if (rawListString && rawListString.trim().length > 0) {
-      // 提取原始名称并去重分类
-      const rawNames = Array.from(new Set(
-        rawListString
-          .split(",")
-          .map(s => s.trim().replace(/['"]/g, ""))
-          .filter(s => s.length > 0)
-      ));
+    // 宽松正则：提取所有看起来像文件名的字符串
+    const imagePattern = /[a-zA-Z0-9_.-]+\.(?:jpg|jpeg|png|gif|bmp|webp)/gi;
+    const foundFiles = rawContent.match(imagePattern);
 
+    if (foundFiles && foundFiles.length > 0) {
+      // 去重输入源
+      const rawNames = Array.from(new Set(foundFiles));
       const categoryCount = rawNames.length;
 
       if (categoryCount > 0) {
-        // 全局去重集合
         const globalUsedImages = new Set<string>();
 
-        // 3. 计算配额
-        // 比如 6 张图，2 个房型 -> 每个房型分 3 张
+        // 计算配额
         const baseQuota = Math.floor(MAX_IMAGES / categoryCount);
         const remainder = MAX_IMAGES % categoryCount;
 
-        // 4. 遍历分类分配图片
         rawNames.forEach((name, index) => {
-          let candidates: string[] = [];
+          if (resultImages.length >= MAX_IMAGES) return;
 
-          // 获取候选图（不再打乱，保持默认顺序）
-          if (IMAGE_MAPPING[name]) {
-            candidates = IMAGE_MAPPING[name];
-          } else {
-            candidates = [resolveCommonAreaImage(name)];
+          let candidates: string[] = [];
+          const cleanName = name.replace(/['"]/g, "").trim();
+
+          // 策略 A: 直接精准匹配 (IMAGE_MAPPING key)
+          if (IMAGE_MAPPING[cleanName]) {
+            candidates = IMAGE_MAPPING[cleanName];
+          }
+          // 策略 B: 尝试修复 "n2901.jpg" 这种房号幻觉 -> 返回对应真实列表
+          else {
+            const realImages = findRealImagesByPrefix(cleanName);
+            if (realImages.length > 0) {
+               candidates = realImages;
+            } else {
+               // 策略 C: 尝试修复 "Spark_Logo.jpg" 等公区幻觉
+               const resolved = resolveCommonAreaImage(cleanName);
+               if (resolved) {
+                 candidates = [resolved];
+               }
+            }
           }
 
-          // 计算当前分类的配额
+          if (candidates.length === 0) return;
+
           const currentQuota = baseQuota + (index < remainder ? 1 : 0);
 
-          // 挑选图片 (去重)
           let pickedCount = 0;
           for (const img of candidates) {
-            // 配额满了就停
             if (pickedCount >= currentQuota) break;
+            if (resultImages.length >= MAX_IMAGES) break;
 
-            // 如果这张图之前没被选过，就选中它
+            // 只有当这张图在全局没被用过时才添加
             if (!globalUsedImages.has(img)) {
               globalUsedImages.add(img);
               resultImages.push(img);
